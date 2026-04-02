@@ -1,0 +1,35 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+.env
+.env.*
+
+# Node / npm (dashboard & plugin)
+node_modules/
+**/node_modules/
+
+# localrouter dashboard: Vite 依赖与构建产物（运行只需 static/dashboard）
+localrouter/dashboard/node_modules/
+localrouter/static/dashboard/
+
+# Vite / tooling cache
+**/.vite/
+.rpt2_cache/
+
+# 打包输出目录（zip 等）
+/dist/
+dist/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,33 @@
+{
+  "id": "clawchips",
+  "name": "clawchips",
+  "description": "Local routing memory + heuristic rules; hooks override provider/model. Dashboard at /plugins/clawchips/dashboard/",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "configPath": {
+        "type": "string",
+        "description": "Absolute path to ClawChips YAML (default: ~/.openclaw/clawchips.yaml, seeded from clawchips_default.yaml if missing)"
+      },
+      "routing": {
+        "type": "object",
+        "properties": {
+          "directives": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "allowPinModel": { "type": "boolean" },
+              "allowPreferTier": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "configPath": {
+      "label": "YAML config path",
+      "placeholder": "/path/to/clawchips.yaml"
+    }
+  }
+}

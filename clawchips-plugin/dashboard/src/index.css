@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #111827;
+  background: #f8f5f6;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(244, 63, 94, 0.08), transparent 22%),
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.05), transparent 18%),
+    #f8f5f6;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(244, 63, 94, 0.18);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 63, 94, 0.16);
+  border-radius: 9999px;
+}
