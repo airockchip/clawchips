@@ -83,7 +83,7 @@ export function modelTargetForTier(
 
 /** Resolves `default`, else first of LOCAL/CLOUD, via merged LLM catalog. */
 export function modelTargetForDefault(tierRules: TierRules, llms: LlmsConfig): ModelTarget | null {
-  const id = tierRules.default ?? tierRules.LOCAL ?? tierRules.CLOUD;
+  const id = tierRules.default ?? tierRules.CLOUD ?? tierRules.LOCAL;
   if (!id) return null;
   return resolveModelRef(llms, id);
 }

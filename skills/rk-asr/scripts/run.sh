@@ -16,8 +16,8 @@ if [ ! -f "$AUDIO_FILE" ]; then
     exit 1
 fi
 
-cd /userdata/rockasr_linux_aarch64_rk3588/demo/rockasr_demo
+cd /userdata/skills/rk-asr/rockasr_linux_aarch64_rk3588/demo/rockasr_demo
 
-sudo ffmpeg -y -i "$AUDIO_FILE" -acodec pcm_s16le -ar 16000 -ac 1 tmp.wav
+sudo ffmpeg -y -loglevel quiet -i "$AUDIO_FILE" -acodec pcm_s16le -ar 16000 -ac 1 tmp.wav
 sudo -E sh -c 'export LD_LIBRARY_PATH=../../lib/ && ./rockasr_demo tmp.wav "$0"' "$AUDIO_FILE"
 sudo rm tmp.wav

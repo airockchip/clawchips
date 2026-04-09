@@ -80,7 +80,7 @@ export function createMemoryRouter(
         action: "redirect",
         target,
         confidence: best.score,
-        reason: `routing memory (score=${best.score.toFixed(4)})`,
+        reason: `memory (score=${best.score.toFixed(4)})`,
       };
     },
   };

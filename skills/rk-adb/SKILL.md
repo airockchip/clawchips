@@ -1,6 +1,8 @@
 ---
 name: rk-adb
-description: Rockchip 设备 ADB 连接技能。支持本地网络/本地有线 ADB 和通过 SSH 连接远程 Windows/Linux PC 的远程 ADB。当用户需要：推送文件到设备、设置系统属性（setprop）、抓取 logcat/kernel log、重启设备、执行 adb shell 命令、dump 设备信息、视频播放测试、SurfaceFlinger 日志抓取时，使用此技能确保 ADB 连接可用。
+description: Rockchip 设备 ADB 连接技能。支持本地网络/本地有线 ADB 和通过 SSH 连接远程 Windows/Linux PC 的远程 ADB。**重点解决 dmesg/logcat 等需要 root 权限的命令执行失败问题**。当用户需要：推送文件到设备、设置系统属性（setprop）、抓取并发送 logcat/kernel log、重启设备、执行 adb shell 命令、dump 设备信息、视频播放测试、SurfaceFlinger 日志抓取时，使用此技能确保 ADB 连接可用。
+metadata:
+  tags: [adb, rockchip, android, dmesg, logcat, qqbot]
 ---
 
 # Rockchip ADB 连接
@@ -8,19 +10,26 @@ description: Rockchip 设备 ADB 连接技能。支持本地网络/本地有线 
 此技能帮助用户连接 Rockchip Android 设备，支持三种模式：
 1. **本地有线 ADB**：设备通过 USB 线直连本地主机 (最稳定)
 2. **本地网络 ADB**：设备与终端同网段，直接网络 ADB
-2. **远程模式**：通过 SSH 连接远程 PC（Windows/Linux），PC 与设备 USB 连接
+3. **远程模式**：通过 SSH 连接远程 PC（Windows/Linux），PC 与设备 USB 连接
 
 ## 触发条件
 
 检测到以下需求时触发：
 - 推送文件 / adb push / adb pull
 - 设置属性 / setprop / getprop
-- 抓取日志 / logcat / kernel log / dmesg
+- 抓取/发送日志 / logcat / kernel log / dmesg
 - 重启设备 / reboot
 - 执行 shell 命令 / adb shell
 - dump 信息 / dumpsys
 - **视频播放测试 / 视频卡顿 / SurfaceFlinger**
-- **渲染线程性能 / HWC / VOP 配置**
+- 通过QQBot 发送日志文件
+
+> [!IMPORTANT]
+> **通过 QQBot 发送文件**：当用户要求发送日志文件时，**必须**使用 `<qqfile>绝对路径</qqfile>` 格式，标签内不能有 `path=` 属性！
+>
+> - ✅ 正确：`<qqfile>/home/rockchip/.openclaw/workspace/kernel.log</qqfile>`
+> - ❌ 错误：`<qqfile path="...">文件名</qqfile>`
+> - 详见「通过 QQBot 发送日志文件」章节
 
 > [!IMPORTANT]
 > **工作目录规则**: 所有辅助脚本必须在**用户的工作目录**执行，使用脚本的**绝对路径**调用。
@@ -36,24 +45,84 @@ description: Rockchip 设备 ADB 连接技能。支持本地网络/本地有线 
 
 ### 自动 Root 权限处理
 
-当检测到以下情况时：
+#### 🔴 核心问题：dmesg 为何经常失败？
 
-* 执行需要 root 权限的命令（如访问 `/data`、`dmesg`、`setprop persist.*` 等）
-*  出现 `Permission denied` 或权限不足错误
+`dmesg`（kernel log）通常需要较高权限（如 root ）才能读取，这是最常见的抓取失败原因。设备默认的 user 版本通常不支持 `adb root`，但 eng / userdebug 版本版本可以。
 
-必须自动尝试执行：
+#### 处理流程（必须按顺序执行）
 
-```
+**Step 1: 优先尝试 adb root**
+
+```bash
 adb root
 adb wait-for-device
 ```
 
-然后重试原命令。
+**Step 2: 验证 root 是否成功**
 
-> ⚠️ 注意：
+```bash
+adb shell whoami
+```
+
+- 输出 `root` → ✅ 成功，继续抓取日志
+- 输出 `shell` 或 `app_xx` → ❌ 失败，进入 Step 3
+
+**Step 3: 备选方案（user 版本无法 root 时）**
+
+| 场景 | 解决方案 |
+|------|---------|
+| **user 版本，无法 root** | 提示用户：`dmesg` 需要 root 权限，建议刷 eng 版本或使用 `adb shell "su -c dmesg"`（需设备已 root） |
+| **eng 版本但仍失败** | 检查 SELinux 状态：`adb shell getprop ro.boot.selinux`，尝试 `adb shell setenforce 0` |
+| **网络 ADB 模式** | 与 USB 模式处理相同，先 `adb connect <IP>` 再执行上述步骤 |
+
+**Step 4: 最终抓取命令**
+
+```bash
+# 方法1: 直接执行（需要 root）
+adb shell dmesg > ./kernel.log
+
+# 方法2: 使用 su（设备已 root）
+adb shell "su -c dmesg" > ./kernel.log
+
+# 方法3: 临时关闭 SELinux 后抓取（eng 版本）
+adb shell setenforce 0
+adb shell dmesg > ./kernel.log
+
+# 方法4: 通过 logcat 读取 kernel 日志（无需 root，部分设备可用）
+adb logcat -d -b kernel > ./kernel.log
+
+# 方法5: 读取 /proc/kmsg（部分设备无需 root）
+adb shell "cat /proc/kmsg" > ./kernel.log
+```
+
+#### 📋 抓取 kernel log 完整流程（推荐）
+
+```bash
+# Step 1: 尝试 root
+adb root
+adb wait-for-device
+
+# Step 2: 检查是否成功
+adb shell whoami
+
+# Step 3: 根据结果选择抓取方式
+if adb shell whoami | grep -q "root"; then
+    # 有 root 权限
+    adb shell dmesg > ./kernel.log
+else
+    # 无 root，尝试备选方案
+    adb logcat -d -b kernel > ./kernel.log 2>/dev/null || \
+    adb shell "cat /proc/kmsg" > ./kernel.log 2>/dev/null || \
+    echo "需要 root 权限，请刷入 eng 版本或确认设备已 root"
+fi
+```
+
+> ⚠️ **重要提醒**：
 >
-> - 若设备不支持 `adb root`（user 版本），需提示用户设备限制
-> - 若是远程 ADB wrapper，同样通过 wrapper 执行 `./adb root`
+> - **user 版本**：大部分设备出场默认是 user 版本，`adb root` 会返回 `adbd cannot run as root in production builds`，这是正常行为，不是错误
+> - **eng 版本**：开发版本默认开启 root，可直接使用
+> - **远程模式**：同样通过 wrapper 执行 `./adb root`，处理逻辑相同
+> - **不要忽略权限错误**：看到 `Permission denied` 必须尝试 root，不要直接放弃
 
 ### 多语言响应规则
 
@@ -63,9 +132,9 @@ adb wait-for-device
 
 > ⚠️ 所有交互提示（选择、确认、错误提示）必须与用户语言保持一致
 
-###  **多设备连接处理规范 **
+### 多设备连接处理规范
 
-场景定义**：当 `adb devices` 或远程 Wrapper 列表中显示 **2 台及以上设备时。
+**场景定义**：当 `adb devices` 或远程 Wrapper 列表中显示 2 台及以上设备时。
 
 **处理策略**： 
 
@@ -108,22 +177,33 @@ python3 <SKILL_PATH>/scripts/adb_helper.py list-profiles
 
 > 请选择 ADB 连接方式：
 > 1. **本地有线 ADB** - 设备通过 USB 线直连本地主机
-> 1. **本地网络 ADB** - 设备与终端在同一网段
-> 2. **远程 USB ADB** - 设备通过 USB 连接到远程 Windows/Linux PC
+> 2. **本地网络 ADB** - 设备与终端在同一网段
+> 3. **远程 USB ADB** - 设备通过 USB 连接到远程 Windows/Linux PC
 
 ### Step 2a: 本地有线模式
 
-```
+```bash
+# 查看已连接的设备
 adb devices
-adb shell
+
+# 验证连接：进入 shell
+adb shell getprop ro.build.fingerprint
 ```
+
+> ⚠️ **权限说明**：本地 USB 模式下，大部分命令（如 `getprop`）可直接执行。若遇到 `Permission denied`，再尝试 `adb root`。
 
 ### Step 2b: 本地网络模式
 
 ```bash
+# 连接设备（确保设备已开启网络ADB：设置 > 开发者选项 > 无线调试）
 adb connect <设备IP>:5555
+
+# 验证连接
 adb devices
+adb shell getprop ro.build.fingerprint
 ```
+
+> ⚠️ **权限说明**：网络模式下同样先直接执行命令，遇到权限问题时再尝试 `adb root`。
 
 ### Step 2c: 远程模式
 
@@ -198,8 +278,10 @@ ADB_PROFILE="other-profile" ./adb devices
 | 拉取文件 | `adb pull <设备路径> <本地路径>` |
 | 设置属性 | `adb shell setprop <属性名> <值>` |
 | 查看属性 | `adb shell getprop <属性名>` |
-| 抓取并保存 logcat | ``adb logcat -d > ./filename.log`` |
-| 抓取并保存 kernel log | `adb shell dmesg > ./filename.log` |
+| 查看设备信息 | `adb shell getprop \| grep -E "ro.product\|ro.build"` |
+| 抓取并保存 logcat | `adb logcat -d > /home/rockchip/.openclaw/workspace/filename.log` |
+| 抓取并保存 kernel log | `adb shell dmesg > /home/rockchip/.openclaw/workspace/kernel.log` |
+| 查看系统服务 | `adb shell dumpsys <服务名>`（如 `battery`、`meminfo`、`SurfaceFlinger`） |
 | 重启设备 | `adb reboot` |
 
 ## 日志文件保存流程 
@@ -207,16 +289,76 @@ ADB_PROFILE="other-profile" ./adb devices
 当用户要求抓取日志（如 `dmesg`, `logcat`）或拉取文件时，必须遵循以下流程： 
 
 * 确定保存路径 
-  * **路径**：使用脚本绝对路径或 `$(pwd)` 指向**用户的工作目录**    
+  * **路径**：使用**绝对路径**指向**用户的工作目录** `/home/rockchip/.openclaw/workspace/`    
   * **目的**：确保生成的文件能直接出现在用户本地的项目文件夹中，而非 AI 的临时目录
 * 日志文件命名规则
   * 格式：`[设备简写]_[日志类型]_[描述]_[时间戳].log` 
   * 示例：`RK3588_dmesg_boot_20251230.log` 或 `ABC123_logcat_main_1000.log`
-
 * 执行命令并重定向
-  * **本地 ADB**：直接使用 `> ./filename.log`
-  * **远程 Wrapper**：同样使用 `> ./filename.log`。Wrapper 会处理 SSH 传输，但重定向由本地 Shell 处理
-* 反馈结果 命令执行完成后，必须明确告知用户： "日志已保存在: [绝对路径/相对路径]/filename.log"
+  * **本地 ADB**：直接使用 `> /home/rockchip/.openclaw/workspace/filename.log`
+  * **远程 Wrapper**：同样使用绝对路径重定向。Wrapper 会处理 SSH 传输，但重定向由本地 Shell 处理
+* 反馈结果
+  * 命令执行完成后，必须明确告知用户： "日志已保存在: /home/rockchip/.openclaw/workspace/filename.log"，并且询问用户是否要求发送日志文件
+  * 如果使用 qqbot，在用户要求发送文件后，**必须**使用下方的正确格式发送
+
+---
+
+## 🚨 通过 QQBot 发送日志文件（关键！）
+
+> 此部分**必须**严格遵守！错误格式会导致文件发送失败！
+
+### ✅ 正确格式
+
+使用 qqfile 标签和文件的绝对路径发送：
+
+```markdown
+<qqfile>/home/rockchip/.openclaw/workspace/kernel.log</qqfile>
+```
+
+### ❌ 错误格式（常见问题！）
+
+```markdown
+# 错误1：使用了 path 属性
+<qqfile path="/home/rockchip/.openclaw/workspace/kernel.log">kernel.log</qqfile>
+
+# 错误2：使用了相对路径
+<qqfile>./kernel.log</qqfile>
+<qqfile>kernel.log</qqfile>
+
+# 错误3：标签未闭合
+<qqfile>/home/rockchip/.openclaw/workspace/kernel.log
+```
+
+### 📋 发送文件必须遵循的规则
+
+| 规则 | 要求 | 错误示例 | 正确示例 |
+|------|------|---------|---------|
+| **路径** | 必须用**绝对路径** | `./kernel.log` | `/home/rockchip/.openclaw/workspace/kernel.log` |
+| **标签名** | 只能是 `qqfile` | `<file>`、`<qqfile path=...>` | `<qqfile>路径</qqfile>` |
+| **闭合** | 必须有 `</qqfile>` | `<qqfile>路径` | `<qqfile>路径</qqfile>` |
+| **大小** | 不能超过 **20MB** | - | - |
+
+### 📝 发送流程示例
+
+```bash
+# 1. 抓取日志（保存到工作目录的绝对路径）
+adb shell dmesg > /home/rockchip/.openclaw/workspace/RK3588_dmesg_20260405.log
+
+# 2. 确认文件存在
+ls -lh /home/rockchip/.openclaw/workspace/RK3588_dmesg_20260405.log
+
+# 3. 发送文件，并回复：
+这是抓取的 kernel log：
+<qqfile>/home/rockchip/.openclaw/workspace/RK3588_dmesg_20260405.log</qqfile>
+```
+
+### 🔧 快速检查清单
+
+发送文件前快速核对：
+- [ ] 路径以 `/` 开头（绝对路径）
+- [ ] 标签是 `<qqfile>...</qqfile>` 格式
+- [ ] 标签内没有 `path=` 等属性
+- [ ] 文件大小 < 20MB
 
 ---
 
@@ -258,22 +400,18 @@ adb shell dumpsys SurfaceFlinger
 adb shell getprop | grep -E "gpu|hwc"
 ```
 
-**手动模式**：
+**手动模式（用户自行播放视频）**：
 ```bash
-# 1. 启动 4K 视频播放测试（替换为实际视频路径）
+# 1. 用户手动在设备上播放视频（或使用命令启动）
 adb shell am start -a android.intent.action.VIEW \
-  -d file:///sdcard/Movies/SVEP_sony_show/04_MEMC_race_4K_30fps.mp4 \
+  -d file:///sdcard/Movies/你的视频.mp4 \
   -t video/mp4
 
-# 2. 等待 30 秒后检查 SurfaceFlinger 状态
-sleep 30
+# 2. 播放一段时间后，执行以下命令获取 SurfaceFlinger 状态
 adb shell dumpsys SurfaceFlinger
 
 # 3. 获取 GPU 服务状态
 adb shell getprop | grep -E "gpu|hwc"
-
-# 4. 检查 Frame Duration 统计
-adb shell dumpsys SurfaceFlinger | grep "Static screen stats:"
 ```
 
 ### 视频路径优先级
@@ -405,6 +543,8 @@ Windows SSH 返回的中文可能显示为乱码（编码问题），这是正�
 
 | 错误 | 原因 | 解决 |
 |-----|------|-----|
+| `Permission denied` (dmesg/logcat) | 需要 root 权限 | 执行 `adb root` 后重试 |
+| `adbd cannot run as root in production builds` | 设备是 user 版本 | 使用 eng 版本，或通过其他方式获取 root |
 | `Permission denied` | SSH 密码错误 | 确认密码 |
 | `Connection refused` | SSH 未开启 | 开启远程 PC 的 SSH 服务 |
 | `no devices found` | 无 ADB 设备 | 检查 USB 连接和设备授权 |

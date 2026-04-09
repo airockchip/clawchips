@@ -43,13 +43,32 @@ M119636_Z0_NONE_1920x1080_1920_NV12_Raster_@WriteBackBuffer_id_0x1490000023a.bin
 | NV12 | YUV 4:2:0 | width |
 | NV16 | YUV 4:2:2 | width |
 | NV24 | YUV 4:4:4 | width |
-| NV15 | 10位 YUV 4:2:0 | width × 1.25 |
-| NV20 | 10位 YUV 4:2:2 | width × 1.25 |
+| NV15 | 10位 YUV 4:2:0 | width / 4 × 5 (width需4对齐) |
+| NV20 | 10位 YUV 4:2:2 | width / 4 × 5 (width需4对齐) |
 
 ## 安装依赖
 
+### 使用 pip
 ```bash
-pip install -r src/OpenClawHelpers/requirements.txt
+pip install numpy Pillow
+```
+
+### 使用系统包管理器
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install python3-numpy python3-pil
+```
+
+**Fedora/RHEL/CentOS:**
+```bash
+sudo dnf install python3-numpy python3-pillow
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S python-numpy python-pillow
 ```
 
 ## 工作原理
@@ -72,5 +91,5 @@ rk-binary-image-decoder/
 ├── README.md             # 本文件
 ├── references/
 │   └── formats.md        # 支持的格式详细说明
-└── src/OpenClawHelpers/  # 转换器python脚本
+├── scripts/              # Python转换脚本
 ```

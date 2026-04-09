@@ -3,6 +3,7 @@
 # If you use short names only (e.g. Qwen3.5-4B), declare models per provider under llms below.
 # For interactive setup, run scripts/setup.mjs manually; otherwise copy this file to ~/.openclaw/clawchips.yaml.
 router:
+  enable: true
   strategy: rules
   rules:
   - LOCAL: rkllm/Qwen3-4B
@@ -23,5 +24,14 @@ embedding:
   dimensions: 2560
   # api_key: sk-xxx
   # api_key_env: OPENAI_API_KEY
+# Optional QQ proactive notifications on tool calls (requires QQ Bot plugin when enabled).
+qq_tool_notify:
+  enabled: false
+  type: c2c
+  account_id: default
+  on_before: false
+  on_after: true
+  max_param_chars: 500
+  max_result_chars: 400
 storage:
   max_prompt_chars: 200

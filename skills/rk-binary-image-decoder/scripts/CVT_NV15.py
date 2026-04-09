@@ -144,7 +144,7 @@ def upsample_uv_2x2(src: np.ndarray, width: int, height: int) -> np.ndarray:
     return dst
 
 
-def nv15_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int) -> tuple:
+def nv15_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int | None = None) -> tuple:
     """
     Convert NV15 data to separate Y, U, V planes (10-bit).
 
@@ -152,7 +152,7 @@ def nv15_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int) -
         file_data: Raw binary NV15 data
         width: Image width in pixels
         height: Image height in pixels
-        stride: Bytes per row in packed Y and UV planes
+        stride: Bytes per row in packed Y and UV planes (optional, defaults to ceil(width * 5 / 4))
 
     Returns:
         Tuple of (Y_plane, U_plane, V_plane) as numpy arrays (10-bit values)
@@ -160,7 +160,9 @@ def nv15_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int) -
     # NV15: 10-bit packed, 4 pixels = 5 bytes, so min stride = ceil(width * 5 / 4)
     # Must be at least (width * 5 + 3) // 4 to cover all pixels
     min_stride = (width * 5 + 3) // 4
-    if stride < min_stride:
+    if stride is None or not isinstance(stride, (int, float)):
+        stride = min_stride
+    elif stride < min_stride:
         stride = min_stride
 
     # NV15: Y plane is height * stride, UV plane is (height/2) * stride
@@ -255,15 +257,22 @@ def write_png16(filename: str, rgba_data: np.ndarray) -> bool:
 
 
 def main():
-    if len(sys.argv) != 6:
-        print(f"Usage: {sys.argv[0]} input.nv15 width height stride output.png", file=sys.stderr)
+    if len(sys.argv) not in (5, 6):
+        print(f"Usage: {sys.argv[0]} input.nv15 width height [stride] output.png", file=sys.stderr)
         sys.exit(1)
 
     input_file = sys.argv[1]
     width = int(sys.argv[2])
     height = int(sys.argv[3])
-    stride = int(sys.argv[4])
-    output_file = sys.argv[5]
+    if len(sys.argv) == 6:
+        try:
+            stride = int(sys.argv[4])
+        except ValueError:
+            stride = None
+        output_file = sys.argv[5]
+    else:
+        stride = None
+        output_file = sys.argv[4]
 
     try:
         with open(input_file, 'rb') as f:

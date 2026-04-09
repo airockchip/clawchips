@@ -9,7 +9,7 @@ import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import type { ParsedLocalRouterConfig } from "../config.js";
-import type { LlmsConfig, LlmModelEntry } from "../config.js";
+import type { LlmsConfig, LlmModelEntry, QqToolNotifyConfig } from "../config.js";
 import type { MemoryBank } from "../localrouter/memory.js";
 import { applyEmbeddingFromParsedConfig, loadLocalRouterConfig } from "../config.js";
 import {
@@ -101,6 +101,82 @@ function listAvailableModelRefs(parsed: ParsedLocalRouterConfig): string[] {
     if (s) ids.add(s);
   }
   return [...ids].sort((a, b) => a.localeCompare(b));
+}
+
+function routingQqToolNotifyPayload(parsed: ParsedLocalRouterConfig) {
+  const cfg = parsed.qqToolNotify;
+  return {
+    enabled: cfg?.enabled === true,
+    openid: cfg?.openid ?? "",
+    type: cfg?.type ?? "c2c",
+    accountId: cfg?.accountId ?? "default",
+    notifyBefore: cfg?.notifyBefore === true,
+    notifyAfter: cfg?.notifyAfter !== false,
+    includeToolNames: cfg?.includeToolNames ?? [],
+    excludeToolNames: cfg?.excludeToolNames ?? [],
+    maxParamChars: cfg?.maxParamChars ?? 500,
+    maxResultChars: cfg?.maxResultChars ?? 400,
+  };
+}
+
+function routingConfigPayload(parsed: ParsedLocalRouterConfig, memoryAvailable: boolean) {
+  const mapping = _rulesToMapping(parsed.router.rules);
+  return {
+    routerEnabled: parsed.router.enable !== false,
+    strategy: parsed.router.strategy ?? "rules",
+    readOnly: false,
+    memoryEnabled: Boolean(parsed.memory?.enabled),
+    memoryAvailable,
+    localModel: mapping.LOCAL ?? "",
+    cloudModel: mapping.CLOUD ?? "",
+    defaultModel: mapping.default ?? "",
+    availableModels: listAvailableModelRefs(parsed),
+    qqToolNotify: routingQqToolNotifyPayload(parsed),
+  };
+}
+
+function cleanStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+}
+
+function sanitizeQqToolNotifyPayload(raw: unknown): QqToolNotifyConfig {
+  const payload = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const openid = typeof payload.openid === "string" ? payload.openid.trim() : "";
+  const type = payload.type === "group" ? "group" : "c2c";
+  const accountId =
+    typeof payload.accountId === "string" && payload.accountId.trim() ? payload.accountId.trim() : "default";
+  const includeToolNames = cleanStringArray(payload.includeToolNames);
+  const excludeToolNames = cleanStringArray(payload.excludeToolNames);
+  const maxParamChars = Number(payload.maxParamChars);
+  const maxResultChars = Number(payload.maxResultChars);
+  return {
+    enabled: payload.enabled === true,
+    openid,
+    type,
+    accountId,
+    notifyBefore: payload.notifyBefore === true,
+    notifyAfter: payload.notifyAfter !== false,
+    ...(includeToolNames.length ? { includeToolNames } : {}),
+    ...(excludeToolNames.length ? { excludeToolNames } : {}),
+    maxParamChars: Number.isFinite(maxParamChars) ? Math.max(80, Math.min(8000, Math.floor(maxParamChars))) : 500,
+    maxResultChars: Number.isFinite(maxResultChars) ? Math.max(80, Math.min(8000, Math.floor(maxResultChars))) : 400,
+  };
+}
+
+function qqToolNotifyToYaml(cfg: QqToolNotifyConfig): Record<string, unknown> {
+  return {
+    enabled: cfg.enabled,
+    ...(cfg.openid ? { openid: cfg.openid } : {}),
+    type: cfg.type,
+    account_id: cfg.accountId,
+    on_before: cfg.notifyBefore,
+    on_after: cfg.notifyAfter,
+    ...(cfg.includeToolNames?.length ? { include_tool_names: cfg.includeToolNames } : {}),
+    ...(cfg.excludeToolNames?.length ? { exclude_tool_names: cfg.excludeToolNames } : {}),
+    max_param_chars: cfg.maxParamChars,
+    max_result_chars: cfg.maxResultChars,
+  };
 }
 
 /** UI rows for the providers table (counts, prices, api kind). */
@@ -235,6 +311,7 @@ export function createDashboardHandler(deps: DashboardHandlerDeps) {
         const parsed = deps.getParsed();
         json(res, {
           status: "ok",
+          routerEnabled: parsed.router.enable !== false,
           strategy: parsed.router.strategy ?? "rules",
           llms: Object.keys(parsed.llms ?? {}),
           dashboard: {
@@ -297,17 +374,7 @@ export function createDashboardHandler(deps: DashboardHandlerDeps) {
       // YAML tier models + strategy (read).
       if (pathname === "/dashboard/api/routing-config" && method === "GET") {
         const parsed = deps.getParsed();
-        const mapping = _rulesToMapping(parsed.router.rules);
-        json(res, {
-          strategy: parsed.router.strategy ?? "rules",
-          readOnly: false,
-          memoryEnabled: Boolean(parsed.memory?.enabled),
-          memoryAvailable: deps.getMemoryBank() !== null,
-          localModel: mapping.LOCAL ?? "",
-          cloudModel: mapping.CLOUD ?? "",
-          defaultModel: mapping.default ?? "",
-          availableModels: listAvailableModelRefs(parsed),
-        });
+        json(res, routingConfigPayload(parsed, deps.getMemoryBank() !== null));
         return true;
       }
 
@@ -315,18 +382,23 @@ export function createDashboardHandler(deps: DashboardHandlerDeps) {
       if (pathname === "/dashboard/api/routing-config" && method === "PUT") {
         const body = await readBody(req);
         const payload = JSON.parse(body) as {
+          routerEnabled?: boolean;
           localModel?: string;
           cloudModel?: string;
           defaultModel?: string;
           strategy?: string;
           memoryEnabled?: boolean;
+          qqToolNotify?: unknown;
         };
+        const routerEnabled =
+          payload.routerEnabled !== undefined ? Boolean(payload.routerEnabled) : deps.getParsed().router.enable !== false;
         const localModel = (payload.localModel ?? "").trim();
         const cloudModel = (payload.cloudModel ?? "").trim();
         const defaultModel = (payload.defaultModel ?? (localModel || cloudModel)).trim();
         const strategy = (payload.strategy ?? "rules").trim() || "rules";
         const memoryEnabled =
           payload.memoryEnabled !== undefined ? Boolean(payload.memoryEnabled) : Boolean(deps.getParsed().memory?.enabled);
+        const qqToolNotify = sanitizeQqToolNotifyPayload(payload.qqToolNotify);
 
         const parsed = deps.getParsed();
         for (const name of [localModel, cloudModel, defaultModel]) {
@@ -339,12 +411,14 @@ export function createDashboardHandler(deps: DashboardHandlerDeps) {
         const text = readFileSync(deps.configPath, "utf-8");
         const data = parseYaml(text) as Record<string, unknown>;
         const router = (data.router as Record<string, unknown>) ?? {};
+        router.enable = routerEnabled;
         router.strategy = strategy;
         router.rules = buildRulesYaml(localModel, cloudModel, defaultModel);
         data.router = router;
         const memory = (data.memory as Record<string, unknown>) ?? {};
         memory.enabled = memoryEnabled;
         data.memory = memory;
+        data.qq_tool_notify = qqToolNotifyToYaml(qqToolNotify);
         const { writeFileSync } = await import("node:fs");
         writeFileSync(deps.configPath, stringifyYaml(data), "utf-8");
 
@@ -353,16 +427,7 @@ export function createDashboardHandler(deps: DashboardHandlerDeps) {
         applyEmbeddingFromParsedConfig(next);
         deps.onConfigReload?.();
 
-        json(res, {
-          strategy: next.router.strategy ?? "rules",
-          readOnly: false,
-          memoryEnabled: Boolean(next.memory?.enabled),
-          memoryAvailable: deps.getMemoryBank() !== null,
-          localModel,
-          cloudModel,
-          defaultModel,
-          availableModels: listAvailableModelRefs(next),
-        });
+        json(res, routingConfigPayload(next, deps.getMemoryBank() !== null));
         return true;
       }
 

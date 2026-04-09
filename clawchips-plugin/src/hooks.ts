@@ -17,9 +17,18 @@ import {
 import { getGlobalPipeline } from "./router-pipeline.js";
 import type { ClawChipsDirectivesConfig, ModelTarget, RouteDecision, Tier } from "./localrouter/types.js";
 import { stripInboundMetadata } from "./strip-inbound-meta.js";
+import {
+  buildQqToolNotifyText,
+  parseQqToolNotifyFromParsedConfig,
+  qqToolNotifyPairKey,
+  scheduleQqToolNotify,
+  shouldNotifyToolName,
+} from "./qq-tool-notify.js";
 
 export type OpenClawPluginApiLike = {
   logger: { info: (m: string) => void; warn: (m: string) => void; error: (m: string) => void };
+  /** Host OpenClaw config; required for qqToolNotify → `sendProactive`. */
+  config?: Record<string, unknown>;
   pluginConfig?: Record<string, unknown>;
   on: (event: string, handler: (...args: unknown[]) => unknown | Promise<unknown>) => void;
   /** When the host supports plugin unload, register cleanup (e.g. clear stash eviction timer). */
@@ -361,6 +370,59 @@ function beginDashboardTurn(
   sessionStash.set(sessionKey, stash);
 }
 
+/** Opens a dashboard task row without rerouting, so host-selected models still appear in task history. */
+function beginDashboardObservedTurn(
+  api: OpenClawPluginApiLike,
+  deps: HooksDeps,
+  sessionKey: string,
+  stash: SessionStash,
+  args: {
+    prompt: string;
+    strategy: string;
+    requestedModel?: string;
+  },
+): void {
+  flushIncompleteDashboardTurn(api, deps, stash, sessionKey);
+  const dash = deps.dashboard;
+  if (!dash) return;
+  const requestId = randomUUID();
+  const requestedModel = (args.requestedModel ?? "").trim();
+  const initialModel = requestedModel || "unknown";
+  stash.dashboardRequestId = requestId;
+  stash.dashboardRoutedModel = initialModel;
+  stash.dashboardStrategy = args.strategy;
+  stash.dashboardTier = "";
+  stash.dashboardFinalized = false;
+  stash.tokenUsage = undefined;
+  stash.hadError = false;
+  if (!sessionKey) {
+    tokenStatsLog(
+      api,
+      "[ClawChips] beginDashboardObservedTurn: empty sessionKey; llm_output/session_end may use a different key and token stats can be lost.",
+    );
+  }
+  try {
+    dash.recordRequest({
+      request_id: requestId,
+      prompt_text: stripInboundMetadata(args.prompt),
+      model: initialModel,
+      requested_model: requestedModel,
+      tier: "",
+      strategy: args.strategy,
+      status: "started",
+    });
+  } catch (e) {
+    api.logger.warn(`[ClawChips] dashboard record failed: ${String(e)}`);
+    stash.dashboardRequestId = undefined;
+    stash.dashboardRoutedModel = undefined;
+    stash.dashboardStrategy = undefined;
+    stash.dashboardTier = undefined;
+    return;
+  }
+  tokenStatsLog(api, `[ClawChips] dashboard observed turn start: requestId=${requestId.slice(0, 12)}… model=${initialModel}`);
+  sessionStash.set(sessionKey, stash);
+}
+
 /**
  * Subscribes to OpenClaw: resolves routing before the model, records dashboard stats on output,
  * and flushes on session end. Passes parsed config and MemoryBank via `deps`.
@@ -373,6 +435,7 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
   const pluginCfg = (api.pluginConfig ?? {}) as Record<string, unknown>;
   const routing = (pluginCfg.routing ?? {}) as Record<string, unknown>;
   const directivesConfig = (routing.directives ?? {}) as ClawChipsDirectivesConfig;
+  const getQqToolNotify = () => parseQqToolNotifyFromParsedConfig(getParsed());
 
   const pluginConfigPayload = (): Record<string, unknown> => ({
     routing: pluginCfg.routing,
@@ -387,7 +450,23 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
     const sessionKey = sessionKeyFromContext(cx);
     const message = extractMessage(ev);
 
-    const INTERNAL_PREFIXES = ["Pre-compaction memory flush", "Compaction safeguard", "[system]", "[internal]"];
+    api.logger.info(`[ClawChips] message: ${message}`);
+
+    // TODO: If message starts with "Pre-compaction memory flush" or "Compaction safeguard", route directly to CLOUD
+    if (message.startsWith("Pre-compaction memory flush") ||
+        message.startsWith("Read HEARTBEAT.md if it exists (workspace context).") ||
+        message.startsWith("A new session was started via /new or /reset.") ||
+        message.startsWith("Compaction safeguard")) {
+      const parsed = getParsed();
+      const tierRules = parseTierRules(parsed.router.rules);
+      const cloudTarget = modelTargetForTier("CLOUD", tierRules, parsed.llms);
+      if (cloudTarget) {
+        api.logger.info(`[ClawChips] Compaction operation: routing to CLOUD ${cloudTarget.provider}/${cloudTarget.model}`);
+        return makeResult(cloudTarget.provider, cloudTarget.model);
+      }
+    }
+
+    const INTERNAL_PREFIXES = ["[system]", "[internal]"];
     if (INTERNAL_PREFIXES.some((p) => message.startsWith(p))) {
       return;
     }
@@ -396,7 +475,20 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
       return;
     }
 
+    const parsed = getParsed();
     const stash: SessionStash = sessionStash.get(sessionKey) ?? {};
+    if (parsed.router.enable === false) {
+      stash.startTime = Date.now();
+      beginDashboardObservedTurn(api, deps, sessionKey, stash, {
+        prompt: message,
+        strategy: "",
+        requestedModel: requestedModelFromContext(cx, ev),
+      });
+      sessionStash.set(sessionKey, stash);
+      api.logger.info("[ClawChips] router disabled; skipping routing");
+      return;
+    }
+
     flushIncompleteDashboardTurn(api, deps, stash, sessionKey);
     stash.startTime = Date.now();
     tokenStatsLog(
@@ -413,7 +505,6 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
     let pinnedModel: ModelTarget | undefined = stash.pinnedModel;
     let preferredTier: Tier | undefined = stash.preferredTier;
 
-    const parsed = getParsed();
     const tierRules = parseTierRules(parsed.router.rules);
 
     // Directive routing wins before the normal pipeline so explicit user intent stays deterministic.
@@ -575,7 +666,98 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
     }
   });
 
-  // Hint to the model: ignore @model / @tier markers in the user text.
+  // Optional: notify a fixed QQ (c2c/group) target on tool calls via qqbot `sendProactive`.
+  // Read dynamically from `clawchips.yaml`; after waits for the matching before send when both are enabled.
+  const qqBeforeNotifyDone = new Map<string, Promise<void>>();
+
+  api.on("before_tool_call", async (event, ctx) => {
+    const qqToolNotify = getQqToolNotify();
+    if (!qqToolNotify || !qqToolNotify.notifyBefore) return;
+    const ev = event as Record<string, unknown>;
+    const cx = ctx as Record<string, unknown>;
+    const toolName = String(ev.toolName ?? "");
+    if (!shouldNotifyToolName(toolName, qqToolNotify)) return;
+    const sessionKey = sessionKeyFromContext(cx);
+    const runId = typeof ev.runId === "string" ? ev.runId : undefined;
+    const toolCallId = typeof ev.toolCallId === "string" ? ev.toolCallId : undefined;
+    const params =
+      ev.params && typeof ev.params === "object" && !Array.isArray(ev.params)
+        ? (ev.params as Record<string, unknown>)
+        : {};
+    const text = buildQqToolNotifyText({
+      phase: "before",
+      toolName,
+      params,
+      sessionKey,
+      runId,
+      toolCallId,
+      cfg: qqToolNotify,
+    });
+    const p = scheduleQqToolNotify({
+      cfg: qqToolNotify,
+      phase: "before",
+      text,
+      hostConfig: api.config,
+      log: api.logger,
+    });
+    if (qqToolNotify.notifyAfter) {
+      qqBeforeNotifyDone.set(qqToolNotifyPairKey({ toolCallId, runId, toolName, sessionKey }), p);
+    }
+  });
+
+  api.on("after_tool_call", async (event, ctx) => {
+    const qqToolNotify = getQqToolNotify();
+    if (!qqToolNotify || !qqToolNotify.notifyAfter) return;
+    const ev = event as Record<string, unknown>;
+    const cx = ctx as Record<string, unknown>;
+    const toolName = String(ev.toolName ?? "");
+    const sessionKey = sessionKeyFromContext(cx);
+    const runId = typeof ev.runId === "string" ? ev.runId : undefined;
+    const toolCallId = typeof ev.toolCallId === "string" ? ev.toolCallId : undefined;
+    const pairKey = qqToolNotifyPairKey({ toolCallId, runId, toolName, sessionKey });
+    const waitBefore = qqBeforeNotifyDone.get(pairKey);
+    qqBeforeNotifyDone.delete(pairKey);
+
+    if (!shouldNotifyToolName(toolName, qqToolNotify)) return;
+    const params =
+      ev.params && typeof ev.params === "object" && !Array.isArray(ev.params)
+        ? (ev.params as Record<string, unknown>)
+        : {};
+    const durationRaw = ev.durationMs;
+    const durationMs =
+      typeof durationRaw === "number"
+        ? durationRaw
+        : typeof durationRaw === "string" && durationRaw.trim()
+          ? Number(durationRaw)
+          : undefined;
+    const text = buildQqToolNotifyText({
+      phase: "after",
+      toolName,
+      params,
+      sessionKey,
+      runId,
+      toolCallId,
+      cfg: qqToolNotify,
+      result: ev.result,
+      error: typeof ev.error === "string" ? ev.error : undefined,
+      durationMs: Number.isFinite(durationMs) ? durationMs : undefined,
+    });
+
+    const sendAfter = () =>
+      scheduleQqToolNotify({
+        cfg: qqToolNotify,
+        phase: "after",
+        text,
+        hostConfig: api.config,
+        log: api.logger,
+      });
+    if (waitBefore) {
+      void waitBefore.then(sendAfter);
+    } else {
+      void sendAfter();
+    }
+  });
+
   api.on("before_prompt_build", async (event) => {
     const ev = event as Record<string, unknown>;
     const prompt = (ev.prompt as string) || "";
@@ -707,12 +889,18 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
       );
     }
 
-    const provider = (ev.provider as string) ?? "";
-    const model = (ev.model as string) ?? "";
-    const fallbackModel = stash.dashboardRoutedModel ?? (provider && model ? modelLabel(provider, model) : "unknown");
+    const provider = String(ev.provider ?? "").trim();
+    const model = String(ev.model ?? "").trim();
+    const finalModel =
+      (provider && model ? modelLabel(provider, model) : "") ||
+      model ||
+      provider ||
+      stash.dashboardRoutedModel ||
+      "unknown";
+    stash.dashboardRoutedModel = finalModel;
 
     try {
-      dash.completeRoutedTurn(stash.dashboardRequestId, fallbackModel, {
+      dash.completeRoutedTurn(stash.dashboardRequestId, finalModel, {
         usage: mergedUsage,
         status: error || stopReason === "error" ? "error" : "completed",
         error_text: error,
@@ -739,7 +927,16 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
     sessionStash.delete(sessionKey);
   });
 
-  api.logger.info("[ClawChips] Hooks registered (before_model_resolve, before_prompt_build, llm_output, session_end)");
+  // Handle before_compaction hook - route to CLOUD
+  api.on("before_compaction", async (event) => {
+    const ev = event as Record<string, unknown>;
+    const message = extractMessage(ev);
+    api.logger.info(`[ClawChips] before_compaction message: ${message}`);
+  });
+
+  api.logger.info(
+    "[ClawChips] Hooks registered (before_model_resolve, before_prompt_build, before_tool_call, after_tool_call, llm_output, session_end)",
+  );
 
   return () => stopStashCleanup();
 }

@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 
-def read_ab24(file_data: bytes, width: int, height: int, stride: int) -> np.ndarray:
+def read_ab24(file_data: bytes, width: int, height: int, stride: int | None = None) -> np.ndarray:
     """
     Read AB24 data and convert to RGBA numpy array.
 
@@ -18,14 +18,16 @@ def read_ab24(file_data: bytes, width: int, height: int, stride: int) -> np.ndar
         file_data: Raw binary data
         width: Image width in pixels
         height: Image height in pixels
-        stride: Bytes per row in input file
+        stride: Bytes per row in input file (optional, defaults to width * 4)
 
     Returns:
         RGBA image as numpy array (height, width, 4)
     """
     # Validate: stride must be at least width * 4 (4 bytes per pixel for AB24)
     min_stride = width * 4
-    if stride < min_stride:
+    if stride is None or not isinstance(stride, (int, float)):
+        stride = min_stride
+    elif stride < min_stride:
         stride = min_stride
 
     required_size = height * stride
@@ -72,15 +74,22 @@ def write_png(filename: str, rgba_data: np.ndarray) -> bool:
 
 
 def main():
-    if len(sys.argv) != 6:
-        print(f"Usage: {sys.argv[0]} input.ab24 width height stride output.png", file=sys.stderr)
+    if len(sys.argv) not in (5, 6):
+        print(f"Usage: {sys.argv[0]} input.ab24 width height [stride] output.png", file=sys.stderr)
         sys.exit(1)
 
     input_file = sys.argv[1]
     width = int(sys.argv[2])
     height = int(sys.argv[3])
-    stride = int(sys.argv[4])
-    output_file = sys.argv[5]
+    if len(sys.argv) == 6:
+        try:
+            stride = int(sys.argv[4])
+        except ValueError:
+            stride = None
+        output_file = sys.argv[5]
+    else:
+        stride = None
+        output_file = sys.argv[4]
 
     try:
         with open(input_file, 'rb') as f:

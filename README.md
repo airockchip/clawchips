@@ -77,7 +77,9 @@ The [skills](./skills) directory includes curated practical skills for edge chip
 
 - RK3588+RK1828 Debian/Ubuntu operating system
 
-### 1. Install OpenClaw
+### ClawChips Installation Steps
+
+#### 1. Install OpenClaw
 
 Please follow the [OpenClaw official documentation](https://docs.openclaw.ai/install) to install and configure OpenClaw. If it is already installed, you can skip this step.
 
@@ -88,7 +90,7 @@ openclaw onboard --install-daemon
 
 Note: ClawChips is currently tested with OpenClaw `2026.3.24 (cff6dc9)`.
 
-### 2. Install ClawChips
+#### 2. Install ClawChips
 
 - Obtain the package
 
@@ -98,10 +100,17 @@ Visit the [releases page](https://github.com/airockchip/clawchips/releases) to d
 
 **Option 2:** Build the plugin package yourself
 
+For the first build, install the required dependencies:
+
 ```bash
 git clone https://github.com/airockchip/clawchips
 cd clawchips-plugin/
 npm install
+```
+
+For each subsequent build, from the project root, run:
+
+```
 bash scripts/package_dist.sh
 ```
 
@@ -123,16 +132,25 @@ Follow the prompts and run the following command to initialize the configuration
 node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
 ```
 
-### 3. Install memory routing dependencies (Optional)
+#### 3. Install memory routing dependencies (Optional)
 
-If you enable memory-based routing, deploy an embedding model service locally on the RK3588 as follows:
+If you enable memory-based routing, you also need to deploy an embedding model service locally on the RK3588 as follows. If you are using the provided firmware image, this service may already be included, and you only need to confirm that it is running properly.
 
 ```
 cd /userdata/
 curl -fsSL https://raw.githubusercontent.com/airockchip/clawchips/main/scripts/install_memory_router_deps.sh | bash -s --
 ```
 
-### 4. Restart OpenClaw
+Confirm that the service is running properly:
+
+```
+journalctl -u embedding-rknn-server.service
+# If you see logs like the following, the service started successfully
+I:        Application startup complete.
+I:        Uvicorn running on http://0.0.0.0:18080 (Press CTRL+C to quit)
+```
+
+#### 4. Restart OpenClaw
 
 ```
 openclaw gateway restart
@@ -161,7 +179,7 @@ If you are not satisfied with the routing result, you can add directives startin
 Example:
 
 ```
-@model(MiniMax-M2.5) Please write a SKILL that can send and receive email
+@model(Qwen3.6-Plus) Please write a SKILL that can send and receive email
 ```
 
 - `@local` / `@cloud`
@@ -203,6 +221,12 @@ You can adjust the OpenClaw gateway configuration as shown below. Note that this
     },
   }
 ```
+
+## Join us — developers, explore countless possibilities together
+
+To fully support efficient development and innovation, we offer a dedicated co-creation support program. Scan the QR code below to apply for complimentary loan of an RK3588 + RK1828 development kit. Based on your submission quality and fit, we will offer enterprises and developers a one-month hands-on kit experience so you can more easily explore the full capabilities of ClawChips and refine high-quality skills.
+
+![Registration QR code](res/baoming.png)
 
 ## Reference Projects
 

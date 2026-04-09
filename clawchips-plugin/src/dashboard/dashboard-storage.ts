@@ -91,6 +91,38 @@ export function parseRoutedUsageForStats(usage?: Record<string, unknown>): {
   return { prompt_tokens, completion_tokens, total_tokens };
 }
 
+type UsageStatsEntry = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  completions: number;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+};
+
+function toUsageStatsEntry(row?: {
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_tokens?: number | null;
+  requests?: number | null;
+  completions?: number | null;
+}): UsageStatsEntry {
+  const promptTokens = Number(row?.prompt_tokens ?? 0);
+  const completionTokens = Number(row?.completion_tokens ?? 0);
+  const totalTokens = Number(row?.total_tokens ?? (promptTokens + completionTokens));
+  const requests = Number(row?.requests ?? row?.completions ?? 0);
+  return {
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens: totalTokens,
+    completions: requests,
+    requests,
+    input_tokens: promptTokens,
+    output_tokens: completionTokens,
+  };
+}
+
 /**
  * Persists per-request history and per-model token aggregates in SQLite (`request_history`, `routed_token_stats`).
  */
@@ -226,44 +258,93 @@ export class DashboardStorage {
   getRoutedUsageStats(): {
     by_model: Record<string, Record<string, number>>;
     totals: Record<string, number>;
+    breakdown: {
+      total: Record<string, number>;
+      local: Record<string, number>;
+      cloud: Record<string, number>;
+    };
   } {
-    const rows = this.db
+    const modelRows = this.db
       .prepare(
-        `SELECT model, prompt_tokens, completion_tokens, total_tokens, completions FROM routed_token_stats ORDER BY model ASC`,
+        `
+        SELECT
+          model,
+          COUNT(*) AS requests,
+          SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens,
+          SUM(COALESCE(completion_tokens, 0)) AS completion_tokens,
+          SUM(COALESCE(total_tokens, 0)) AS total_tokens
+        FROM request_history
+        WHERE TRIM(COALESCE(model, '')) <> ''
+        GROUP BY model
+        ORDER BY model ASC
+        `,
       )
       .all() as Array<{
       model: string;
       prompt_tokens: number;
       completion_tokens: number;
       total_tokens: number;
-      completions: number;
+      requests: number;
     }>;
+    const totalRow = this.db
+      .prepare(
+        `
+        SELECT
+          COUNT(*) AS requests,
+          SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens,
+          SUM(COALESCE(completion_tokens, 0)) AS completion_tokens,
+          SUM(COALESCE(total_tokens, 0)) AS total_tokens
+        FROM request_history
+        `,
+      )
+      .get() as {
+      prompt_tokens: number | null;
+      completion_tokens: number | null;
+      total_tokens: number | null;
+      requests: number | null;
+    };
+    const tierRows = this.db
+      .prepare(
+        `
+        SELECT
+          UPPER(TRIM(COALESCE(tier, ''))) AS tier,
+          COUNT(*) AS requests,
+          SUM(COALESCE(prompt_tokens, 0)) AS prompt_tokens,
+          SUM(COALESCE(completion_tokens, 0)) AS completion_tokens,
+          SUM(COALESCE(total_tokens, 0)) AS total_tokens
+        FROM request_history
+        GROUP BY UPPER(TRIM(COALESCE(tier, '')))
+        `,
+      )
+      .all() as Array<{
+      tier: string;
+      prompt_tokens: number | null;
+      completion_tokens: number | null;
+      total_tokens: number | null;
+      requests: number | null;
+    }>;
+
     const by_model: Record<string, Record<string, number>> = {};
-    const totals = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, completions: 0 };
-    for (const r of rows) {
+    for (const r of modelRows) {
       const m = (r.model ?? "").trim();
       if (!m) continue;
-      const entry = {
-        prompt_tokens: r.prompt_tokens ?? 0,
-        completion_tokens: r.completion_tokens ?? 0,
-        total_tokens: r.total_tokens ?? 0,
-        completions: r.completions ?? 0,
-        input_tokens: r.prompt_tokens ?? 0,
-        output_tokens: r.completion_tokens ?? 0,
-      };
-      by_model[m] = entry;
-      totals.prompt_tokens += entry.prompt_tokens;
-      totals.completion_tokens += entry.completion_tokens;
-      totals.total_tokens += entry.total_tokens;
-      totals.completions += entry.completions;
+      by_model[m] = toUsageStatsEntry(r);
     }
+
+    const breakdown = {
+      total: toUsageStatsEntry(totalRow),
+      local: toUsageStatsEntry(),
+      cloud: toUsageStatsEntry(),
+    };
+    for (const row of tierRows) {
+      if (row.tier === "LOCAL") breakdown.local = toUsageStatsEntry(row);
+      if (row.tier === "CLOUD") breakdown.cloud = toUsageStatsEntry(row);
+    }
+
     return {
       by_model,
-      totals: {
-        ...totals,
-        input_tokens: totals.prompt_tokens,
-        output_tokens: totals.completion_tokens,
-      },
+      totals: breakdown.total,
+      breakdown,
     };
   }
 

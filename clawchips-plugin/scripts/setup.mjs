@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * ClawChips install-time router.rules + memory setup (interactive by default).
+ * ClawChips install-time router.rules + memory + QQ notify setup (interactive by default).
  *
- * - Interactive: prompts for LOCAL / CLOUD / default + memory.enabled every run
+ * - Interactive: prompts for LOCAL / CLOUD / default + memory.enabled + qq_tool_notify.enabled every run
  *   (including when clawchips.yaml exists).
  * - Skip: set CLAWCHIPS_SETUP_SKIP=1 to copy bundled clawchips_default.yaml to the target path (no prompts).
  * - When stdin is not a TTY (e.g. under a parent process), try /dev/tty for prompts; if still unavailable, copy the bundled default (CI).
@@ -155,6 +155,17 @@ function parseExistingMemoryEnabled(root) {
 }
 
 /**
+ * @param {Record<string, unknown>} root
+ * @returns {boolean | undefined}
+ */
+function parseExistingQqNotifyEnabled(root) {
+  const qq = root.qq_tool_notify ?? root.qqToolNotify;
+  if (!qq || typeof qq !== "object") return undefined;
+  if (!("enabled" in qq)) return undefined;
+  return Boolean(/** @type {Record<string, unknown>} */ (qq).enabled);
+}
+
+/**
  * @param {string} yamlPath
  * @returns {Record<string, unknown>}
  */
@@ -174,6 +185,7 @@ function loadOrSeedYaml(yamlPath) {
     serve: { host: "0.0.0.0", port: 8910, show_model_prefix: false },
     router: { strategy: "rules", rules: [] },
     memory: { enabled: false },
+    qq_tool_notify: { enabled: false },
     storage: { max_prompt_chars: 200 },
   };
 }
@@ -260,6 +272,7 @@ async function runInteractive(yamlPath, io) {
   const existingRoot = loadOrSeedYaml(yamlPath);
   const existing = parseExistingTierRules(existingRoot);
   const existingMemoryEnabled = parseExistingMemoryEnabled(existingRoot);
+  const existingQqNotifyEnabled = parseExistingQqNotifyEnabled(existingRoot);
 
   const rl = createInterface({ input: inputStream, output });
 
@@ -279,6 +292,11 @@ async function runInteractive(yamlPath, io) {
     const cloud = await askModel("CLOUD (cloud routing target)", refs, sugCloud, rl);
     const def = await askModel("default (fallback / ambiguous-tier model)", refs, sugDef, rl);
     const memoryEnabled = await askYesNo("Enable memory routing (memory.enabled)?", existingMemoryEnabled, rl);
+    const qqNotifyEnabled = await askYesNo(
+      "Enable QQ tool notifications (qq_tool_notify.enabled)? Requires installed QQ Bot plugin.",
+      existingQqNotifyEnabled,
+      rl,
+    );
 
     const root = loadOrSeedYaml(yamlPath);
     const router = root.router && typeof root.router === "object" ? /** @type {Record<string, unknown>} */ (root.router) : {};
@@ -294,6 +312,17 @@ async function runInteractive(yamlPath, io) {
     memory.enabled = memoryEnabled;
     root.memory = memory;
 
+    root.qq_tool_notify = {
+      enabled: qqNotifyEnabled,
+      type: "c2c",
+      account_id: "default",
+      on_before: false,
+      on_after: true,
+      max_param_chars: 500,
+      max_result_chars: 400,
+    };
+    delete root.qqToolNotify;
+
     const out = stringifyYaml(root, { lineWidth: 120 });
 
     writeFileSync(yamlPath, out, "utf8");
@@ -302,6 +331,7 @@ async function runInteractive(yamlPath, io) {
     console.log(`  CLOUD=${cloud}`);
     console.log(`  default=${def}`);
     console.log(`  memory.enabled=${memoryEnabled}`);
+    console.log(`  qq_tool_notify.enabled=${qqNotifyEnabled}`);
   } finally {
     try {
       await rl.close();
@@ -373,7 +403,7 @@ async function main() {
     logDiag("openclaw.json missing — manual provider/model only");
   }
 
-  logDiag("branch: interactive prompts for LOCAL / CLOUD / default / memory.enabled");
+  logDiag("branch: interactive prompts for LOCAL / CLOUD / default / memory.enabled / qq_tool_notify.enabled");
   await runInteractive(yamlPath, {
     inputStream: resolved.stream,
     closeInputStream: resolved.closeStream,

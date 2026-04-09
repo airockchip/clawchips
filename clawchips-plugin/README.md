@@ -18,6 +18,38 @@ node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
 
 Enable memory in YAML (`memory.enabled`, `embedding` OpenAI-compatible endpoint, etc.) when you use routing memory.
 
+### QQ tool-call notifications (`qq_tool_notify`)
+
+Optional: send proactive QQ messages on `before_tool_call` / `after_tool_call` via the installed QQ Bot plugin (`sendProactive`). Configure this in **`clawchips.yaml`** as a top-level `qq_tool_notify` block (camelCase alias `qqToolNotify` is also accepted).
+
+| Field | Meaning |
+| --- | --- |
+| `enabled` | Must be `true` to activate. |
+| `openid` | Target user or group openid. |
+| *(omit or placeholder)* | If `openid` is unset, or exactly `"<user-or-group-openid>"` / `"<用户或群-openid>"`, ClawChips reads `known-users.json` under `$OPENCLAW_STATE_DIR/qqbot/data/` and `~/.openclaw/qqbot/data/`, and uses the row with the greatest **`lastSeenAt`**. |
+| `type` | `c2c` or `group` (default `c2c` when not using known-users fallback). |
+| `accountId` | QQ bot account id (default `default`). |
+| `onBefore` / `onAfter` | **Before:** default **off** — set `onBefore` or `notifyBefore` to `true` to enable. **After:** default **on** — set `onAfter` or `notifyAfter` to `false` to disable. Aliases: `notifyBefore` / `notifyAfter`. |
+| `includeToolNames` / `excludeToolNames` | Allow/deny tool names. Aliases: `onlyTools` / `skipTools`. |
+| `maxParamChars` / `maxResultChars` | Limits for argument/result text in the message. |
+
+**Plugins:** Tencent `@tencent-connect/openclaw-qqbot` (global extension `openclaw-qqbot`) or `@openclaw/qqbot`. Requires QQ channel enabled in the host config.
+
+**Ordering:** If both phases are enabled, the **after** send is chained after the **before** send completes, so messages tend to arrive in order on QQ.
+
+**Debug:** `CLAWCHIPS_QQ_NOTIFY_DEBUG=1` logs failed dynamic imports for `sendProactive`.
+
+Example (`~/.openclaw/clawchips.yaml`):
+
+```yaml
+qq_tool_notify:
+  enabled: true
+  type: c2c
+  account_id: default
+  on_before: false
+  on_after: true
+```
+
 ## Directives (user messages)
 
 `@model(provider/model)`, `@local` / `@edge` / `@rk` (local tier), `@cloud`; optional `session`. With memory enabled, natural-language phrases may trigger memory ops (see hooks).

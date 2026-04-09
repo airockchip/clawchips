@@ -33,9 +33,30 @@ Things like:
 
 ### ASR
 
-- 当收到音频消息或音频文件并且需要进行转录时，使用rk-asr技能，技能详细介绍位于`skills/rk-asr/SKILL.md`
 - 音频文件常见后缀名如下：
-3gp/3gpp/aa/aac/aax/ac3/acc/act/aif/aifc/aiff/alac/amr/ape/atrac/au/awb/cda/dct/dsf/dff/dss/dts/dvf/eac3/ec3/flac/gsm/iklax/ivs/m4a/m4b/m4p/m4r/mid/midi/mka/mlp/mmf/mov/mp3/mp4/mpc/msv/ogg/oga/opus/ra/ram/raw/rm/rmi/s3m/silk/snd/smv/swf/tak/tta/voc/vox/wav/wma/wmv/wv/wvc/xm
+mp3/wav/flac/aac/m4a/ogg/wma/amr/alac
+
+- 当收到音频消息或音频文件并且需要进行转录时使用   
+在终端中执行以下命令进行音频识别：
+```bash
+cd ~/.openclaw/workspace/skills/rk-asr/scripts && ./run.sh "/path/to/audio.wav"
+```
+
+执行命令后的处理规则（按顺序匹配，只执行第一个匹配项）：
+
+**情况A - 短音频（输出以"text res:\n"开头）：**
+→ 直接输出识别文本
+
+**情况B - 长音频（输出包含"FILE (absolute path): "）：**
+→ 提取后面的文件绝对路径
+→ 直接将文件发送给用户，使用绝对路径发送文件，严禁读取文件
+→ 停止，不要输出任何其他内容
+
+**情况C - 错误：**
+→ 输出错误信息
+
+⚠️ 遇到情况B时，绝对禁止：cat、read、显示、预览该文件内容
+
 
 ---
 

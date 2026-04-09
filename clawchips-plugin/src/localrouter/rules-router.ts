@@ -74,7 +74,7 @@ export const rulesRouter: Router = {
       action: "redirect",
       target,
       confidence: scored.confidence,
-      reason: `heuristic ${tierLabel}`,
+      reason: `rule ${tierLabel}`,
     };
   },
 };

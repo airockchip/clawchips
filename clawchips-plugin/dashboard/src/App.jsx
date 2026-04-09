@@ -44,6 +44,45 @@ const INITIAL_MODEL_FORM = {
   cacheWritePrice: "",
 };
 
+const DEFAULT_QQ_TOOL_NOTIFY = {
+  enabled: false,
+  openid: "",
+  type: "c2c",
+  accountId: "default",
+  notifyBefore: false,
+  notifyAfter: true,
+  includeToolNames: [],
+  excludeToolNames: [],
+  maxParamChars: 500,
+  maxResultChars: 400,
+};
+
+function normalizeRoutingState(data) {
+  if (!data) return null;
+  const qqToolNotify = data.qqToolNotify || {};
+  return {
+    ...data,
+    qqToolNotify: {
+      ...DEFAULT_QQ_TOOL_NOTIFY,
+      ...qqToolNotify,
+      includeToolNames: Array.isArray(qqToolNotify.includeToolNames) ? qqToolNotify.includeToolNames : [],
+      excludeToolNames: Array.isArray(qqToolNotify.excludeToolNames) ? qqToolNotify.excludeToolNames : [],
+    },
+  };
+}
+
+function listToInput(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return typeof value === "string" ? value : "";
+}
+
+function inputToList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function MetricCard({ icon: Icon, label, value, hint }) {
   return (
     <div className="rounded-3xl bg-white/90 p-5 ring-1 ring-black/[0.04] shadow-[0_10px_36px_-20px_rgba(15,23,42,0.22)]">
@@ -59,6 +98,44 @@ function MetricCard({ icon: Icon, label, value, hint }) {
   );
 }
 
+// Two metrics for displaying vertical segmentation (cloud/edge)
+function TwoMetricCard({ icon: Icon, label, topValue, bottomValue, topLabel, bottomLabel, topColor = "text-slate-900", bottomColor = "text-slate-600" }) {
+  return (
+    <div className="rounded-3xl bg-white/90 p-5 ring-1 ring-black/[0.04] shadow-[0_10px_36_-20px_rgba(15,23,42,0.22)] flex flex-col h-full">
+      {/* Icon and Title */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm font-medium text-slate-500">{label}</div>
+        <div className="rounded-2xl bg-slate-100 p-2 text-slate-700">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+
+      {/* Top half data (Cloud) */}
+      <div className="flex flex-col">
+        <div className={`text-2xl font-semibold tracking-tight ${topColor}`}>
+          {topValue}
+        </div>
+        <div className="text-xs text-slate-400 mt-1 font-medium uppercase tracking-wide">
+          {topLabel}
+        </div>
+      </div>
+
+      {/* Separator */}
+      <div className="my-3 border-b border-slate-100"></div>
+
+      {/* Lower half of the data (local) */}
+      <div className="flex flex-col">
+        <div className={`text-xl font-medium ${bottomColor}`}>
+          {bottomValue}
+        </div>
+        <div className="text-xs text-slate-400 mt-1 font-medium uppercase tracking-wide">
+          {bottomLabel}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TextField({ label, value, onChange, placeholder, type = "text", disabled = false, rightAdornment = null }) {
   return (
     <label className="block">
@@ -70,9 +147,8 @@ function TextField({ label, value, onChange, placeholder, type = "text", disable
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
           disabled={disabled}
-          className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${
-            rightAdornment ? "pr-12" : ""
-          }`}
+          className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${rightAdornment ? "pr-12" : ""
+            }`}
         />
         {rightAdornment ? <div className="absolute inset-y-0 right-3 flex items-center">{rightAdornment}</div> : null}
       </div>
@@ -176,19 +252,24 @@ export default function App() {
       : "127.0.0.1:8910";
 
   const refreshHome = useCallback(async () => {
-    const [healthData, staticsData, historyData] = await Promise.all([
-      api.health(),
-      api.statics(),
-      api.history(5),
-    ]);
-    setHealth(healthData);
-    setStatics(staticsData);
-    setRecent(historyData?.items || []);
+    try {
+      const [healthData, staticsData, historyData] = await Promise.all([
+        api.health(),
+        api.statics(),
+        api.history(5),
+      ]);
+      setHealth(healthData);
+      setStatics(staticsData);
+      setRecent(historyData?.items || []);
+
+    } catch (error) {
+      console.error("Failed to retrieve data:", error);
+    }
   }, []);
 
   const refreshRouting = useCallback(async () => {
     const data = await api.routingConfig();
-    setRouting(data);
+    setRouting(normalizeRoutingState(data));
   }, []);
 
   const refreshProviders = useCallback(async () => {
@@ -231,16 +312,18 @@ export default function App() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      refreshHome().catch(() => {});
+      refreshHome().catch(() => { });
       if (page === "providers") {
-        refreshProviders().catch(() => {});
+        refreshProviders().catch(() => { });
       }
     }, 8000);
     return () => clearInterval(timer);
   }, [page, refreshHome, refreshProviders]);
 
-  const totals = statics?.totals || {};
   const modelCount = useMemo(() => Object.keys(statics?.by_model || {}).length, [statics]);
+  const overviewBreakdown = statics?.breakdown || {};
+  const totalOverview = overviewBreakdown.total || {};
+  const localOverview = overviewBreakdown.local || {};
 
   function showToast(message, type = "success") {
     setToast({ message, type });
@@ -297,13 +380,21 @@ export default function App() {
     setToast(null);
     try {
       const saved = await api.saveRoutingConfig({
+        routerEnabled: Boolean(routing.routerEnabled ?? true),
         localModel: routing.localModel,
         cloudModel: routing.cloudModel,
         defaultModel: routing.defaultModel,
         strategy: routing.strategy,
         memoryEnabled: Boolean(routing.memoryEnabled),
+        qqToolNotify: {
+          ...routing.qqToolNotify,
+          includeToolNames: inputToList(routing.qqToolNotify?.includeToolNames),
+          excludeToolNames: inputToList(routing.qqToolNotify?.excludeToolNames),
+          maxParamChars: Number(routing.qqToolNotify?.maxParamChars || DEFAULT_QQ_TOOL_NOTIFY.maxParamChars),
+          maxResultChars: Number(routing.qqToolNotify?.maxResultChars || DEFAULT_QQ_TOOL_NOTIFY.maxResultChars),
+        },
       });
-      setRouting(saved);
+      setRouting(normalizeRoutingState(saved));
       showToast("Runtime and routing config saved.");
       await refreshHome();
       await refreshMemory(1);
@@ -543,11 +634,10 @@ export default function App() {
           {toast?.message ? (
             <div className="pointer-events-none fixed right-6 top-6 z-50">
               <div
-                className={`max-w-md rounded-2xl px-4 py-3 text-sm font-medium shadow-lg ring-1 ${
-                  toast.type === "error"
-                    ? "bg-rose-50 text-rose-700 ring-rose-200"
-                    : "bg-slate-900 text-white ring-slate-900/10"
-                }`}
+                className={`max-w-md rounded-2xl px-4 py-3 text-sm font-medium shadow-lg ring-1 ${toast.type === "error"
+                  ? "bg-rose-50 text-rose-700 ring-rose-200"
+                  : "bg-slate-900 text-white ring-slate-900/10"
+                  }`}
               >
                 {toast.message}
               </div>
@@ -557,29 +647,41 @@ export default function App() {
           {page === "home" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-4">
-                <MetricCard
+                <TwoMetricCard
                   icon={LayoutDashboard}
-                  label="Completions"
-                  value={totals.completions ?? 0}
-                  hint="Total routed requests persisted locally"
+                  label="Requests"
+                  topValue={Number(totalOverview.requests ?? totalOverview.completions ?? 0).toLocaleString()}
+                  topLabel="Total"
+                  topColor="text-sky-600"
+                  bottomValue={Number(localOverview.requests ?? localOverview.completions ?? 0).toLocaleString()}
+                  bottomLabel="Local"
+                  bottomColor="text-emerald-600"
                 />
-                <MetricCard
+                <TwoMetricCard
                   icon={Database}
-                  label="Prompt Tokens"
-                  value={totals.prompt_tokens ?? 0}
-                  hint="Aggregated input volume"
+                  label="Input Tokens"
+                  topValue={Number(totalOverview.input_tokens ?? totalOverview.prompt_tokens ?? 0).toLocaleString()}
+                  topLabel="Total"
+                  topColor="text-sky-600"
+                  bottomValue={Number(localOverview.input_tokens ?? localOverview.prompt_tokens ?? 0).toLocaleString()}
+                  bottomLabel="Local"
+                  bottomColor="text-emerald-600"
                 />
-                <MetricCard
+                <TwoMetricCard
                   icon={Cloud}
-                  label="Completion Tokens"
-                  value={totals.completion_tokens ?? 0}
-                  hint="Aggregated output volume"
+                  label="Output Tokens"
+                  topValue={Number(totalOverview.output_tokens ?? totalOverview.completion_tokens ?? 0).toLocaleString()}
+                  topLabel="Total"
+                  topColor="text-sky-600"
+                  bottomValue={Number(localOverview.output_tokens ?? localOverview.completion_tokens ?? 0).toLocaleString()}
+                  bottomLabel="Local"
+                  bottomColor="text-emerald-600"
                 />
                 <MetricCard
                   icon={Route}
                   label="Models Active"
                   value={modelCount}
-                  hint={`Strategy: ${health?.strategy || "-"}`}
+                  hint=""
                 />
               </div>
 
@@ -647,6 +749,21 @@ export default function App() {
                 ) : (
                   <div className="space-y-5">
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-700">Router</div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            Enable ClawChips routing. When disabled, requests will not be router.
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(routing.routerEnabled ?? true)}
+                          disabled={routing.readOnly}
+                          onChange={(event) => setRouting((prev) => ({ ...prev, routerEnabled: event.target.checked }))}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 disabled:cursor-not-allowed"
+                        />
+                      </label>
                       <TextField
                         label="Strategy"
                         value={routing.strategy || ""}
@@ -671,16 +788,6 @@ export default function App() {
                           className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 disabled:cursor-not-allowed"
                         />
                       </label>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 text-sm text-slate-600 sm:grid-cols-2">
-                      <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                        <span>Models available</span>
-                        <span className="font-medium text-slate-900">{availableModels.length}</span>
-                      </div>
-                      <div className="flex justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                        <span>Dashboard path</span>
-                        <span className="font-medium text-slate-900">{health?.dashboard?.path || "/dashboard/"}</span>
-                      </div>
                     </div>
                     {routing.readOnly ? (
                       <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
@@ -712,24 +819,188 @@ export default function App() {
                     <SelectField
                       label="LOCAL model ID"
                       value={routing.localModel}
-                      options={availableModels}
+                        options={routingModelOptions}
                       disabled={routing.readOnly}
                       onChange={(value) => setRouting((prev) => ({ ...prev, localModel: value }))}
                     />
                     <SelectField
                       label="CLOUD model ID"
                       value={routing.cloudModel}
-                      options={availableModels}
+                        options={routingModelOptions}
                       disabled={routing.readOnly}
                       onChange={(value) => setRouting((prev) => ({ ...prev, cloudModel: value }))}
                     />
                     <SelectField
                       label="Default model ID"
                       value={routing.defaultModel}
-                      options={availableModels}
+                        options={routingModelOptions}
                       disabled={routing.readOnly}
                       onChange={(value) => setRouting((prev) => ({ ...prev, defaultModel: value }))}
                     />
+                  </div>
+                )}
+              </Card>
+
+              <Card
+                title="QQ Tool Notify"
+                subtitle="Configure proactive QQ messages for before/after tool calls and save them to clawchips.yaml."
+                right={
+                  <button
+                    onClick={handleRoutingSave}
+                    disabled={!routing || routing.readOnly || busyKey === "routing"}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save
+                  </button>
+                }
+              >
+                {!routing ? (
+                  <LoadingRow text="Loading QQ notify config..." />
+                ) : (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-700">Enabled</div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            Send proactive QQ messages for tool calls.
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(routing.qqToolNotify?.enabled)}
+                          disabled={routing.readOnly}
+                          onChange={(event) =>
+                            setRouting((prev) => ({
+                              ...prev,
+                              qqToolNotify: { ...prev.qqToolNotify, enabled: event.target.checked },
+                            }))}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                      <SelectField
+                        label="Target Type"
+                        value={routing.qqToolNotify?.type || "c2c"}
+                        options={["c2c", "group"]}
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, type: value },
+                          }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <TextField
+                        label="OpenID"
+                        value={routing.qqToolNotify?.openid || ""}
+                        placeholder="Leave empty to use known-users fallback"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, openid: value },
+                          }))}
+                      />
+                      <TextField
+                        label="Account ID"
+                        value={routing.qqToolNotify?.accountId || "default"}
+                        placeholder="default"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, accountId: value },
+                          }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-700">Notify Before</div>
+                          <div className="mt-1 text-sm text-slate-500">Send a message before each tool call.</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(routing.qqToolNotify?.notifyBefore)}
+                          disabled={routing.readOnly}
+                          onChange={(event) =>
+                            setRouting((prev) => ({
+                              ...prev,
+                              qqToolNotify: { ...prev.qqToolNotify, notifyBefore: event.target.checked },
+                            }))}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div>
+                          <div className="text-sm font-medium text-slate-700">Notify After</div>
+                          <div className="mt-1 text-sm text-slate-500">Send a message after each tool call.</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(routing.qqToolNotify?.notifyAfter)}
+                          disabled={routing.readOnly}
+                          onChange={(event) =>
+                            setRouting((prev) => ({
+                              ...prev,
+                              qqToolNotify: { ...prev.qqToolNotify, notifyAfter: event.target.checked },
+                            }))}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400 disabled:cursor-not-allowed"
+                        />
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <TextField
+                        label="Include Tool Names"
+                        value={listToInput(routing.qqToolNotify?.includeToolNames)}
+                        placeholder="toolA, toolB"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, includeToolNames: value },
+                          }))}
+                      />
+                      <TextField
+                        label="Exclude Tool Names"
+                        value={listToInput(routing.qqToolNotify?.excludeToolNames)}
+                        placeholder="toolX, toolY"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, excludeToolNames: value },
+                          }))}
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                      <TextField
+                        label="Max Param Chars"
+                        value={String(routing.qqToolNotify?.maxParamChars ?? DEFAULT_QQ_TOOL_NOTIFY.maxParamChars)}
+                        placeholder="500"
+                        type="number"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, maxParamChars: value },
+                          }))}
+                      />
+                      <TextField
+                        label="Max Result Chars"
+                        value={String(routing.qqToolNotify?.maxResultChars ?? DEFAULT_QQ_TOOL_NOTIFY.maxResultChars)}
+                        placeholder="400"
+                        type="number"
+                        disabled={routing.readOnly}
+                        onChange={(value) =>
+                          setRouting((prev) => ({
+                            ...prev,
+                            qqToolNotify: { ...prev.qqToolNotify, maxResultChars: value },
+                          }))}
+                      />
+                    </div>
                   </div>
                 )}
               </Card>
@@ -738,19 +1009,18 @@ export default function App() {
 
           {page === "providers" && (
             <Card
-              title="OpenClaw 模型提供商"
-              subtitle={`读取与写入 ~/.openclaw/openclaw.json 的 models.providers${
-                providers.openclawConfigPath ? `（当前：${providers.openclawConfigPath}）` : ""
-              }。路由页下拉的可用模型会合并此处与 clawchips.yaml 的 llms。`}
+              title="OpenClaw model provider"
+              subtitle={`Read and write to ~/.openclaw/openclaw.json's models.providers${providers.openclawConfigPath ? ` (Current: ${providers.openclawConfigPath})` : ""
+                }. Available models in the routing page dropdown will be merged from here and clawchips.yaml's llms.`}
             >
               {providers.openclawError ? (
                 <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                  无法解析 openclaw.json：{providers.openclawError}
+                  Failed to parse openclaw.json: {providers.openclawError}
                 </div>
               ) : null}
               {providers.yamlLlmsCount > 0 ? (
                 <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  clawchips.yaml 中另有 {providers.yamlLlmsCount} 个 llms 提供商；同名 provider 时以 YAML 为准。
+                  There are {providers.yamlLlmsCount} additional llms providers in clawchips.yaml; when names conflict, the YAML version takes precedence.
                 </div>
               ) : null}
               {providers.providers?.length ? (
@@ -801,9 +1071,8 @@ export default function App() {
                               </div>
                               <div>
                                 <span
-                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                    provider.hasApiKey ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                                  }`}
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${provider.hasApiKey ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                                    }`}
                                 >
                                   {provider.hasApiKey ? "Key Set" : "No Key"}
                                 </span>
@@ -906,8 +1175,8 @@ export default function App() {
                 <LoadingRow
                   text={
                     providers.openclawError
-                      ? "修复 openclaw.json 后即可在此管理 Provider。"
-                      : "暂无 Provider。点击右上角「Add Provider」写入 OpenClaw，或先在 OpenClaw 网关中配置模型。"
+                      ? "Fix openclaw.json and you can manage providers here."
+                      : "No providers available. Click the top-right 「Add Provider」 to add a new provider to OpenClaw, or configure models in the OpenClaw gateway first."
                   }
                 />
               )}
@@ -1143,13 +1412,12 @@ export default function App() {
                             <td className="py-4 pr-4 text-slate-900 whitespace-nowrap">{formatCost(item.total_cost)}</td>
                             <td className="py-4 pr-4">
                               <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  item.has_feedback
-                                    ? item.feedback_tier === "LOCAL"
-                                      ? "bg-emerald-50 text-emerald-700"
-                                      : "bg-sky-50 text-sky-700"
-                                    : "bg-rose-50 text-rose-700"
-                                }`}
+                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.has_feedback
+                                  ? item.feedback_tier === "LOCAL"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-sky-50 text-sky-700"
+                                  : "bg-rose-50 text-rose-700"
+                                  }`}
                               >
                                 {item.has_feedback ? item.feedback_tier || "-" : "NONE"}
                               </span>

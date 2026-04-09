@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 
-def nv16_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int) -> tuple:
+def nv16_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int | None = None) -> tuple:
     """
     Convert NV16 data to separate Y, U, V planes.
 
@@ -19,13 +19,15 @@ def nv16_to_yuv_planes(file_data: bytes, width: int, height: int, stride: int) -
         file_data: Raw binary NV16 data
         width: Image width in pixels
         height: Image height in pixels
-        stride: Bytes per row in Y and UV planes
+        stride: Bytes per row in Y and UV planes (optional, defaults to width)
 
     Returns:
         Tuple of (Y_plane, U_plane, V_plane) as numpy arrays
     """
     # Ensure stride is at least width (1 byte per pixel for Y plane)
-    if stride < width:
+    if stride is None or not isinstance(stride, (int, float)):
+        stride = width
+    elif stride < width:
         stride = width
 
     y_plane_size = height * stride
@@ -121,15 +123,22 @@ def write_png(filename: str, rgba_data: np.ndarray) -> bool:
 
 
 def main():
-    if len(sys.argv) != 6:
-        print(f"Usage: {sys.argv[0]} input.nv16 width height stride output.png", file=sys.stderr)
+    if len(sys.argv) not in (5, 6):
+        print(f"Usage: {sys.argv[0]} input.nv16 width height [stride] output.png", file=sys.stderr)
         sys.exit(1)
 
     input_file = sys.argv[1]
     width = int(sys.argv[2])
     height = int(sys.argv[3])
-    stride = int(sys.argv[4])
-    output_file = sys.argv[5]
+    if len(sys.argv) == 6:
+        try:
+            stride = int(sys.argv[4])
+        except ValueError:
+            stride = None
+        output_file = sys.argv[5]
+    else:
+        stride = None
+        output_file = sys.argv[4]
 
     try:
         with open(input_file, 'rb') as f:

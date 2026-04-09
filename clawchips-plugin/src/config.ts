@@ -29,6 +29,7 @@ export type LoggingConfig = {
 export type RouterRulesEntry = Record<string, string>;
 
 export type RouterConfig = {
+  enable?: boolean;
   strategy?: string;
   rules?: RouterRulesEntry[];
 };
@@ -97,6 +98,21 @@ export type EmbeddingYaml = {
   apiKeyEnv?: string;
 };
 
+export type QqToolNotifyConfig = {
+  enabled: boolean;
+  /** QQ user openid (c2c) or group openid (group). */
+  openid: string;
+  type: "c2c" | "group";
+  accountId: string;
+  /** Default `false`; set `onBefore` or `notifyBefore` to `true` to enable. */
+  notifyBefore: boolean;
+  notifyAfter: boolean;
+  includeToolNames?: string[];
+  excludeToolNames?: string[];
+  maxParamChars: number;
+  maxResultChars: number;
+};
+
 export type LocalRouterYamlRoot = {
   serve?: ServeConfig;
   logging?: LoggingConfig;
@@ -105,6 +121,8 @@ export type LocalRouterYamlRoot = {
   storage?: StorageConfig;
   llms?: LlmsConfig;
   embedding?: EmbeddingYaml;
+  qq_tool_notify?: Record<string, unknown>;
+  qqToolNotify?: Record<string, unknown>;
 };
 
 /** Fully parsed config with `routing` ready for `computeEmbedding(..., routing)`. */
@@ -116,6 +134,7 @@ export type ParsedLocalRouterConfig = {
   storage: StorageConfig;
   llms: LlmsConfig;
   embedding?: EmbeddingYaml;
+  qqToolNotify: QqToolNotifyConfig | null;
   /** Subset for embedding-engine + MemoryBank constructor. */
   routing: RoutingConfig;
   /** Normalized memory options for `MemoryBank`. */
@@ -160,6 +179,66 @@ function memoryYamlToConfig(m: MemoryYaml | undefined): MemoryConfig {
   };
 }
 
+function parseStringList(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((s) => s.trim());
+  return out.length ? out : undefined;
+}
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
+function pickFirst(obj: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (key in obj) return obj[key];
+  }
+  return undefined;
+}
+
+function parseQqToolNotify(raw: Record<string, unknown> | undefined): QqToolNotifyConfig | null {
+  if (!raw) return null;
+  const openid = typeof raw.openid === "string" ? raw.openid.trim() : "";
+  const type = raw.type === "group" ? "group" : "c2c";
+  const rawAccountId = pickFirst(raw, ["accountId", "account_id"]);
+  const accountId = typeof rawAccountId === "string" && rawAccountId.trim() ? rawAccountId.trim() : "default";
+  const notifyBefore =
+    pickFirst(raw, ["onBefore", "on_before"]) === true || pickFirst(raw, ["notifyBefore", "notify_before"]) === true;
+  const notifyAfter =
+    pickFirst(raw, ["onAfter", "on_after"]) !== false && pickFirst(raw, ["notifyAfter", "notify_after"]) !== false;
+  const includeToolNames = parseStringList(
+    pickFirst(raw, ["includeToolNames", "include_tool_names", "onlyTools", "only_tools"]),
+  );
+  const excludeToolNames = parseStringList(
+    pickFirst(raw, ["excludeToolNames", "exclude_tool_names", "skipTools", "skip_tools"]),
+  );
+  const maxParamChars = clampInt(pickFirst(raw, ["maxParamChars", "max_param_chars"]), 80, 8000, 500);
+  const maxResultChars = clampInt(pickFirst(raw, ["maxResultChars", "max_result_chars"]), 80, 8000, 400);
+  return {
+    enabled: raw.enabled === true,
+    openid,
+    type,
+    accountId,
+    notifyBefore,
+    notifyAfter,
+    ...(includeToolNames?.length ? { includeToolNames } : {}),
+    ...(excludeToolNames?.length ? { excludeToolNames } : {}),
+    maxParamChars,
+    maxResultChars,
+  };
+}
+
+/** Router defaults keep routing enabled unless explicitly disabled in YAML. */
+function normalizeRouterConfig(router: RouterConfig | undefined): RouterConfig {
+  return {
+    enable: router?.enable !== false,
+    strategy: router?.strategy,
+    rules: router?.rules,
+  };
+}
+
 /**
  * Parse YAML text into structured config and derived `routing` / `memoryConfig`.
  */
@@ -169,20 +248,22 @@ export function parseLocalRouterConfig(yamlText: string): ParsedLocalRouterConfi
 
   const serve = asRecord(root.serve) as ServeConfig | undefined;
   const logging = asRecord(root.logging) as LoggingConfig | undefined;
-  const router = asRecord(root.router) as RouterConfig | undefined;
+  const router = normalizeRouterConfig(asRecord(root.router) as RouterConfig | undefined);
   const memory = asRecord(root.memory) as MemoryYaml | undefined;
   const storage = asRecord(root.storage) as StorageConfig | undefined;
   const llms = asRecord(root.llms) as LlmsConfig | undefined;
   const embedding = asRecord(root.embedding) as EmbeddingYaml | undefined;
+  const qqToolNotify = parseQqToolNotify(asRecord(root.qq_tool_notify ?? root.qqToolNotify));
 
   return {
     serve: serve ?? {},
     logging: logging ?? {},
-    router: router ?? {},
+    router,
     memory: memory ?? {},
     storage: storage ?? {},
     llms: llms ?? {},
     ...(embedding ? { embedding } : {}),
+    qqToolNotify,
     routing: embeddingYamlToRouting(embedding),
     memoryConfig: memoryYamlToConfig(memory),
   };
