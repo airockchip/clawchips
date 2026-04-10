@@ -77,6 +77,10 @@ ClawChips 内置一个本地运行的智能路由网关，位于 OpenClaw 与多
 
 - RK3588+RK1828 Debian/Ubuntu操作系统
 
+### 快速开始
+
+完整的开发板环境搭建和安装请参考[ClawChips_Quick_Start](./ClawChips_Quick_Start.md)
+
 ### ClawChips安装步骤
 
 #### 1. 安装OpenClaw

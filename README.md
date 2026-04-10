@@ -77,6 +77,10 @@ The [skills](./skills) directory includes curated practical skills for edge chip
 
 - RK3588+RK1828 Debian/Ubuntu operating system
 
+### Quick Start
+
+For the full development board environment setup and installation process, see [ClawChips_Quick_Start](./ClawChips_Quick_Start.md).
+
 ### ClawChips Installation Steps
 
 #### 1. Install OpenClaw
