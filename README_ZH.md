@@ -11,27 +11,81 @@
 
 ---
 
-**说明**：当前版本为v0.5.0技术预览版，正式版即将更新，敬请期待。
+**说明**：当前版本为技术预览版，还在不断迭代更新优化体验。
 
 ## 关于 ClawChips
 
-ClawChips开源项目是一套面向端侧部署和优化OpenClaw的开源参考解决方案。提供了智能端云路由网关，一系列端侧好用的SKILL，可视化Dashboard等功能，优化在端侧平台使用OpenClaw的体验。
+ClawChips开源项目是一套面向端侧部署和优化OpenClaw的开源参考解决方案。提供了一系列端侧算法SKILL，ModelHub端侧算法调度服务，智能端云路由网关，可视化Dashboard等功能，优化在端侧平台使用OpenClaw的体验。
 
 | 功能 | 说明 |
 | --- | --- |
-| **本地 / 云端智能路由** | 智能识别任务复杂度，在本地模型与云端模型之间自动分发请求，节省Token用量 |
-| **反馈驱动记忆** | 支持将请求历史与反馈标签写入记忆库，用于优化后续相似请求的路由决策。 |
-| **SKILLS** |  内置一系列端侧好用的SKILL，并且将持续不断丰富 |
-| **Dashboard** | 提供路由统计、运行时配置、Provider 管理、反馈标注和记忆查看等功能。 |
+| **SKILLS** |  内置一系列端侧算法SKILL，提供本地化的语音、视觉、知识库等能力 |
+| **ModelHub** | 管理和调度算法模型的网关，方便SKILL接入调用算法服务 |
+| **端云智能路由（实验）** | 智能识别任务复杂度，在本地模型与云端模型之间自动分发请求，节省Token用量；支持记忆路由，持续优化路由决策 |
+| **Dashboard** | 提供路由统计、运行时配置、反馈标注和记忆查看等功能。 |
 
 ---
 
-## 端云路由
+## SKILLS
 
-ClawChips 内置一个本地运行的智能路由网关，位于 OpenClaw 与多个模型后端之间。
+在[skills](./skills/README_ZH.md)目录内置一系列端侧芯片平台能力的SKILL，在持续不断适配更新丰富，欢迎各位开发者提交分享。
 
-- 智能识别任务复杂度，支持任务请求在本地 / 云端路由本地智能路由
-- 支持记忆路由配合使用，持续优化路由决策
+当前提供了基于ModelHub部署的ASR（语音识别）/TTS（语音合成）/VLM（视觉语音大模型）等算法服务的Skill应用实例，可参考做进一步的开发。
+
+| Skill | 目录 | 功能 | 典型用途 |
+|---|---|---|---|
+| `rk-asr` | `rk-asr/` | 将音频文件转写为文本。 | 用于语音转文字、音频转录或语音识别结果获取。 |
+| `rk-tts` | `rk-tts/` | 将文本转换为音频。 | 用于文本转语音、生成音频或直接板端朗读文本。 |
+| `rk-vl` | `rk-vl/` | 基于VLM模型对图像进行自然语言的目标检测识别，支持摄像头持续监控和提醒。 | 用于从图片或摄像头中检测、监控包裹快递、老人跌倒等自然语言描述目标。 |
+| `rk-rag` | `rk-rag/` | 构建并查询知识库。 | 用于将文档导入本地向量库，并基于指定知识库进行检索问答。 |
+| `rk-meeting-watcher` | `rk-meeting-watcher/` | 实时监听会议语音，通过 ASR 转写内容，匹配配置的关键词，并在命中后发送提醒。 | 用于监听会议中的重要关键词，并及时收到提醒通知。 |
+
+## ModelHub
+
+ModelHub 是 ClawChips 面向 RK 端侧芯片的本地模型服务调度网关，用于统一管理板端可用的算法模型服务，并为 SKILL、OpenClaw 插件或其他本地应用提供稳定的调用入口。
+
+它位于应用逻辑与具体模型服务之间，负责根据设备资源与服务状态完成任务排队、模型服务拉起、健康检查、请求转发和结果查询。上层 SKILL 不需要关心某个模型是否已经启动、当前设备是否繁忙、服务端口如何分配等细节，只需要通过统一接口提交任务即可。
+
+ModelHub 支持：
+
+- 使用 YAML 配置文件描述 RK3588、RK1820/RK1828 等设备及其承载的模型服务
+- 按设备并发度和模型显存 / 内存占用进行任务调度，避免多个重模型同时抢占资源
+- 自动执行模型服务的启动、停止和健康检查命令
+- 将 HTTP 请求转发到目标模型服务，兼容 OpenAI 风格的本地模型 API
+
+典型调用链如下：
+
+```text
+┌─────────────────────┐     ┌─────────────────────┐
+│        SKILL        │     │   OpenClaw Plugin   │
+└──────────┬──────────┘     └──────────┬──────────┘
+           │                           │
+           └─────────────┬─────────────┘
+                         │
+                         ▼
+                ┌─────────────────┐
+                │    ModelHub     │
+                │ Scheduler / API │
+                └────────┬────────┘
+                         │
+       ┌─────────────────┼─────────────────┬─────────────────┐
+       │                 │                 │                 │
+       ▼                 ▼                 ▼                 ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│     ASR     │   │     TTS     │   │     VLM     │   │  Embedding  │
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+```
+
+**说明:**
+- 更多安装、配置和客户端调用示例可参考 [model_hub_py](./model_hub_py/README_ZH.md)。
+- ASR/TTS/VLM等算法模型服务在ClawChips的固件中已经内置，安装环境请参考[ClawChips_Quick_Start](../ClawChips_Quick_Start.md)
+
+## 端云路由（实验）
+
+ClawChips 插件内置一个本地运行的智能路由网关，位于 OpenClaw 与多个模型后端之间。
+
+- 智能识别任务复杂度，支持任务请求自动路由到本地 / 云端
+- 支持记忆路由，持续优化路由决策
 - 支持Dashboard配置界面
 
 ```text
@@ -57,19 +111,19 @@ ClawChips 内置一个本地运行的智能路由网关，位于 OpenClaw 与多
                                                                └─────────────────────────┘
 ```
 
+更多安装、配置和使用示例可参考 [clawchips-plugin](./clawchips-plugin/README_ZH.md)。
+
+**说明**：使用本地LLM作为OpenClaw的Provider当前还处于实验阶段，仅供体验。
+
 ---
 
 ## Dashboard 功能
 
-网关提供一个Dashboard能够方便进行配置，使用演示如下：
+网关提供一个Dashboard能够方便进行后台配置和查看统计信息，使用演示如下：
 
 ![Dashboard 预览](res/dashboard.gif)
 
 ---
-
-## SKILLS
-
-在[skills](./skills)目录内置精选端侧芯片平台的好用的SKILL，后续将不断适配更新丰富，欢迎各位开发者提交分享。
 
 ## 安装指南
 
@@ -79,147 +133,7 @@ ClawChips 内置一个本地运行的智能路由网关，位于 OpenClaw 与多
 
 ### 快速开始
 
-完整的开发板环境搭建和安装请参考[ClawChips_Quick_Start](./ClawChips_Quick_Start.md)
-
-### ClawChips安装步骤
-
-#### 1. 安装OpenClaw
-
-请参考 [OpenClaw 官方文档](https://docs.openclaw.ai/install)安装配置OpenClaw，已安装可以跳过
-
-```
-npm install -g openclaw@2026.3.24
-openclaw onboard --install-daemon
-```
-
-备注：当前在OpenClaw 2026.3.24 (cff6dc9)版本上测试通过
-
-#### 2. 安装ClawChips
-
-- 获取安装包
-
-方式1：直接下载发布包
-
-访问[release页面](https://github.com/airockchip/clawchips/releases)下载
-
-方式2：自己构建插件包
-
-首次构建需要安装一些依赖包
-```bash
-git clone https://github.com/airockchip/clawchips
-cd clawchips-plugin/
-npm install
-```
-
-后面每次只要在工程根目录执行如下命令打包即可：
-```
-bash scripts/package_dist.sh
-```
-
-将`dist/clawchips.zip`拷贝到开发板安装，
-
-- 安装
-
-安装命令如下：
-
-```
-openclaw plugins install clawchips.zip
-```
-
-- 初始化配置
-
-根据提示执行如下命令进行初始化配置
-
-```
-node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
-```
-
-#### 3. 安装记忆路由依赖（可选）
-
-如果开启记忆路由功能，还需要按照如下在RK3588开发板本地部署一个embedding模型服务（如果使用提供的固件有带则不需要安装，只需确认一下服务是否正常运行）
-
-```
-cd /userdata/
-curl -fsSL https://raw.githubusercontent.com/airockchip/clawchips/main/scripts/install_memory_router_deps.sh | bash -s --
-```
-
-确认服务是否正常运行
-```
-journalctl -u embedding-rknn-server.service
-# 有看到如下日志表示服务有启动成功
-I:        Application startup complete.
-I:        Uvicorn running on http://0.0.0.0:18080 (Press CTRL+C to quit)
-```
-
-#### 4. 重启OpenClaw
-
-```
-openclaw gateway restart
-```
-
-启动后即可访问Dashboard Web页面，访问URL： `http://<ip>:18789/plugins/clawchips/dashboard`
-
-## 使用指南
-
-### 测试路由功能
-
-直接和OpenClaw对话后，可以查看dashboard中的`Tasks`页面
-
-![Dashboard Tasks](res/dashboard-tasks.png)
-
-这里也可以对结果进行标记，标记后的任务可以在dashboard中的`Memory`页面查看
-
-![Dashboard Memory](res/dashboard-memory.png)
-
-### 对话指令
-
-如果对路由结果不满意，也可以直接在对话中添加`@`开头的指令来直接选择模型或者路由到哪层，当前支持以下指令
-
-- @model(model-id)
-
-例如：
-
-```
-@model(Qwen3.6-Plus) 请写一个可以收发邮件的SKILL
-```
-
-- @local / @cloud
-
-例如：
-
-```
-@local 你好
-```
-
-```
-@cloud 请写一个可以收发邮件的SKILL
-```
-
-指令设置之后会被记住，影响下次的选择，可以在dashboard中的`Memory`页面查看
-
-## 常见问题
-
-- 局域网无法访问Dashboard web页面
-
-openclaw的gateway配置可以参考如下进行修改，但是安全性会降低需要注意：
-
-```
-  "gateway": {
-    "port": 18789,
-    "mode": "local",
-    "bind": "lan",
-    "controlUi": {
-      "allowedOrigins": [
-        "http://localhost:18789",
-        "http://127.0.0.1:18789",
-        "http://192.168.31.82:18789"
-      ],
-      "dangerouslyAllowHostHeaderOriginFallback": true,
-      "allowInsecureAuth": true,
-      "dangerouslyDisableDeviceAuth": true
-    },
-  }
-```
+完整的开发板环境搭建和安装请参考《[ClawChips快速上手指南](./ClawChips_Quick_Start.md)》
 
 ## 诚邀开发者“一起玩出百样精彩”
 为全力支撑开发者高效开发与创新，我们特别推出专属共创支持机制：

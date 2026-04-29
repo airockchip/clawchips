@@ -11,7 +11,7 @@
 ### 1.1 硬件要求
 
 - RK_EVB10_RK3588_V10开发板 × 1
-- RK1820/1828协处理器 × 1
+- 1828协处理器 × 1
 - USB-C数据线 × 1
 - RK3588电源适配器 × 1
 - 计算机 × 1
@@ -58,6 +58,7 @@ cd /usr/bin
 
 ## 2 部署 ClawChips
 
+### 2.1 检查固件是否已经出厂烧写
 首先检查开发板是否已经烧写ClawChips系统镜像：
 
 ```bash
@@ -76,291 +77,56 @@ openclaw plugins list |grep clawchips
 
 若已烧写ClawChips系统镜像，则可以直接跳转至 [2.3 配置云端模型](#configCloud)
 
-若未烧写ClawChips系统镜像，目前提供了2种部署方式：
+本文部署所需的资源文件可网盘下载，请向官方邮箱发邮件申请获取链接：[rkmarketing@rock-chips.com](mailto:rkmarketing@rock-chips.com)
 
-* 系统镜像快捷部署
-* 手动部署
-
-用户可按需选择部署方式，部署所需的资源文件目前需要向此官方邮箱发邮件申请：[rkmarketing@rock-chips.com](mailto:rkmarketing@rock-chips.com)
-
-### 2.1 系统镜像快捷部署
+### 2.2 系统镜像快捷部署
 
 烧写系统镜像的步骤如下：
-
-* 从官方路径下载镜像文件 update.img
+* 从网盘的images目录下载最新的镜像文件压缩包，然后解压
 * RK3588开发板上的 ADB  端口通过数据线与计算机相连
 * 完成驱动安装：
   - Windows：安装 DriverAssitant_v5.14 驱动；
   - Linux ：无需安装，直接使用 upgrade_tool 工具即可；
-* 安装烧写工具：
+  - Mac : 无需安装，直接使用 upgrade_tool 工具即可。
+* 安装烧写工具（位于网盘的tools目录下）：
   - Windows：使用 RKDevTool_v3.41_for_window 工具
   - Linux：使用 upgrade_tool_v2.55_for_linux 工具
-* RKDevTool_v3.41_for_window：解压即用，解压后可阅读 《开发工具使用文档_v1.0.pdf》学习如何使用
-* upgrade_tool_v2.55_for_linux ：解压即用，解压后可阅读 《命令行开发工具使用文档.pdf》学习如何使用
+  - Mac: 使用 upgrade_tool_v2.55_for_mac工具
+* 烧写
+  * RKDevTool_v3.41_for_window：解压即用，解压后可参考文档 《开发工具使用文档_v1.0.pdf》
+  * upgrade_tool_v2.55_for_linux ：解压即用，解压后可参考文档《命令行开发工具使用文档.pdf》
+  * upgrade_tool_v2.55_for_mac ：解压即用，解压后可参考文档《命令行开发工具使用文档.pdf》
 
-烧写完成后即可跳转至 [2.3 配置云端模型](#configCloud)
 
-### 2.2 手动部署
+- 分区调整
 
-#### 2.2.1 操作系统要求
-
-* **计算机（主机端）**：已安装 adb 调试工具
-
-* **RK3588 开发板（板端）**：Debian/Ubuntu 操作系统，需要安装以下依赖：
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 更新软件源
-sudo apt update
-
-# 安装基础工具
-sudo apt install -y ffmpeg adb curl cron
-
-# 安装python3相关工具
-sudo apt install -y python3 python3-pip python3.11-venv python3-numpy python3-pil
-
-# 验证安装
-python3 --version
-pip3 --version
-ffmpeg -version
-adb --version
-```
-
-> **注意**：安装过程中需要保持开发板连接互联网
-
-#### 2.2.2 安装 RKNN3
-
-RKNN3 提供了大模型板端运行时的软件环境，支持在 RK1820/1828 协处理器上部署大语言模型。主要包含下列组成部分：
-
-| 组件 | 说明 |
-|------|------|
-| rk1820_firmware | RK1820/1828协处理器固件 |
-| rknn3_api | RKNN模型加载、推理、LLM模型推理及会话管理等核心功能库 |
-| rkllm3-server | 提供OpenAI兼容API服务，支持文本和图片输入 |
-| rknn3_transfer_proxy | 提供Host端与RK1820/1828协处理器间的通信接口，支持PCIe和USB连接 |
-
-##### 2.2.2.1 获取 RKNN3
-
-从官方路径下载RKNN3安装包，RKNN3 的目录结构：
-
-```bash
-rknn3-20260326_190956
-├─ 20260326_190956
-│  ├─ rk1820_firmware
-│  └─ rknn3-runtime
-│     ├─ rknn3-api
-│     ├─ rkllm3-server
-│     └─ rknn3_transfer_proxy
-└─ install_rknn3.sh
-```
-
-##### 2.2.2.2 执行安装
-
-将 RKNN3 路径保存到变量后执行以下命令：
-
-```bash
-# 在主机端执行
-
-RKNN3_PATH=/path/to/rknn3  # 替换为实际路径
-
-# 推送RK1820/1828固件（sodimm模块）
-adb push ${RKNN3_PATH}/rk1820_firmware/EXT_SODIMM/update.img /usr/lib/firmware/rknn3_rk1820.img
-
-# 推送 rkllm3-server
-adb push ${RKNN3_PATH}/rknn3-runtime/rkllm3-server/bin/linux-aarch64/rkllm3-server /usr/bin/rkllm3-server
-
-# 增加可执行权限
-adb shell chmod +x /usr/bin/rkllm3-server
-
-# 推送传输代理
-adb push ${RKNN3_PATH}/rknn3-runtime/rknn3_transfer_proxy/linux-aarch64/rknn3_transfer_proxy /usr/bin/rknn3_transfer_proxy
-
-# 增加可执行权限
-adb shell chmod +x /usr/bin/rknn3_transfer_proxy
-
-# 推送 RKNN3 API 库
-adb push ${RKNN3_PATH}/rknn3-runtime/rknn3-api/Linux/aarch64/* /usr/lib/
-
-# 同步文件系统
-adb shell sync
-
-# 重启设备（使固件及相关服务生效）
-adb shell reboot
-```
-
-##### 2.2.2.3 验证安装
-
-重启后，通过以下命令验证 RKNN3 是否安装成功：
-
-```bash
-# 检查 rkllm3-server 是否存在
-adb shell ls -la /usr/bin/rkllm3-server
-
-# 检查 rknn3_transfer_proxy 是否存在
-adb shell ls -la /usr/bin/rknn3_transfer_proxy
-
-# 检查 RKNN3 API 库是否安装
-adb shell ls -la /usr/lib/librknn3_api.so
-
-# 进入开发板终端，检查 rknn3_transfer_proxy 服务状态
-adb shell
-cd /usr/bin
-./rknn3_transfer_proxy devices
-
-# 预期输出：
-# List of ntb devices attached
-# 0000:01:00.0        xxxxxx    PCIE
-```
-
-#### 2.2.3 部署大模型 API 服务
-
-rkllm3-server 提供 OpenAI 兼容 API 服务，支持文本和图片输入，暂不支持语音和视频输入
-
-##### 2.2.3.1 部署模型文件
-
-从官方路径获取模型 qwen3-4b-thinking，目录结构如下：
-
-```bash
-qwen3-4b-thinking
-├─ Qwen3-4B.rknn           #RKNN 模型文件
-├─ Qwen3-4B.tokenizer.gguf #词表文件
-├─ Qwen3-4B.embed.bin      #embedding 文件
-├─ Qwen3-4B.weight         #weight 文件
-└─ run.sh                  #启动rkllm3-server的脚本
-```
-
-将模型文件推送至板端：
-
-```bash
-# 推送文件
-adb push qwen3-4b-thinking /userdata/
-# 同步文件系统
-adb shell sync
-```
-
-##### 2.2.3.2 启动 rkllm3-server
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 切换到模型文件目录
-cd /userdata/qwen3-4b-thinking
-
-# 增加可执行权限
-chmod +x ./run.sh
-
-# 启动 rkllm3-server
-./run.sh
-```
-
-##### 2.2.3.3 验证 rkllm3-server
-
-启动后，通过以下命令验证服务是否正常运行：
-
-```bash
-# 在主机端执行，测试 API 是否可访问
-curl http://127.0.0.1:8080/v1/models
-
-# 预期输出示例：
-# {
-#   "object": "list",
-#   "data": [
-#     {
-#       "id": "Qwen3-4B",
-#       "object": "model",
-#       "created": 1234567890,
-#       "owned_by": "rockchip"
-#     }
-#   ]
-# }
-
-# 或者在开发板终端检查进程
-adb shell "ps aux | grep rkllm3-server"
-```
-
-#### 2.2.4 安装 OpenClaw
-
-> ⚠️ **注意**：以下步骤在 **RK3588 开发板** 上执行。如果通过 adb 连接到开发板，建议先执行 `adb shell su linaro` 切换为普通用户，后续操作都在普通用户下进行
-
-##### 2.2.4.1 安装 Node.js
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 切换为普通用户
-su linaro
-
-# 安装 nvm
-sudo curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
-
-# 加载 nvm 环境变量（每次打开新终端都需要执行，或者添加到 ~/.bashrc）
-source "$HOME/.nvm/nvm.sh"
-
-# 安装 Node.js 25
-nvm install 25
-
-# 验证安装
-node -v
-npm -v
-```
-
-##### 2.2.4.2 安装 OpenClaw
-
-推荐安装 2026.3.24 的版本：
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 切换为普通用户
-su linaro
-
-# 加载 nvm 环境变量
-source "$HOME/.nvm/nvm.sh"
-
-# 安装 OpenClaw
-npm install -g openclaw@2026.3.24
-```
-
-#### 2.2.5 安装 ClawChips 插件
-
-##### 2.2.5.1 安装插件
-
-ClawChips 内置一个本地运行的智能路由网关，位于 OpenClaw 与多个模型后端之间
-
-* 智能识别任务复杂度，支持任务请求在本地 / 云端路由本地智能路由
-* 支持记忆路由配合使用，持续优化路由决策
-* 支持Dashboard配置界面
-
-详细的安装方法和使用说明请参考：https://github.com/airockchip/clawchips/blob/main/README_ZH.md
-
-##### 2.2.5.2 安装记忆路由依赖
-
-如果开启记忆路由功能，还需要按照如下在RK3588开发板本地部署一个embedding模型服务（如果使用系统镜像快捷部署则该服务已经预装，只需确认一下服务是否正常运行）
+为了压缩固件的体积，这里对固件的rootfs和userdata分区进行了压缩，可以在烧写完成后可以使用如下命令重新调整分区大小
 
 ```bash
 # 连接RK3588
 adb shell
 
-# 部署embedding模型服务
-cd /userdata/
-curl -fsSL https://raw.githubusercontent.com/airockchip/clawchips/main/scripts/install_memory_router_deps.sh | bash -s --
+# 调整分区大小
+resize2fs /dev/mmcblk0p6
+resize2fs /dev/mmcblk0p8
 
-# 确认服务是否正常运行
-journalctl -u embedding-rknn-server.service
-
-# 有看到如下日志则表示服务正常运行
-# I:        Application startup complete.
-# I:        Uvicorn running on http://0.0.0.0:18080 (Press CTRL+C to quit)
+# 查看分区大小，可以看到/和/userdata的挂载点容量大小已经变大
+df -h
+#文件系统        大小  已用  可用 已用% 挂载点
+#/dev/root        14G  5.4G  7.8G   41% /
+#devtmpfs        3.8G   12K  3.8G    1% /dev
+#tmpfs           3.9G     0  3.9G    0% /dev/shm
+#tmpfs           1.6G  2.4M  1.6G    1% /run
+#tmpfs           5.0M   20K  5.0M    1% /run/lock
+#tmpfs           3.9G   88K  3.9G    1% /tmp
+#/dev/mmcblk0p7  124M  5.3M  118M    5% /oem
+#/dev/mmcblk0p8   44G  7.2G   35G   18% /userdata
+#tmpfs           792M   40K  792M    1% /run/user/1000
 ```
+
+
 
 ### 2.3 配置云端模型 <span id="configCloud"></span>
-
-#### 2.3.1 配置 OpenClaw
 
 这一步主要为了配置API服务。因为本地部署的模型服务在安装ClawChips插件时会自动配置，此处只需要完成云端模型厂商API服务配置
 
@@ -411,184 +177,21 @@ openclaw onboard --install-daemon
 
 ![8](./res/quick_start/8.png)
 
-#### 2.3.2 配置 ClawChips
+- **模型上下文配置**
 
-* OpenClaw启动后在主机端访问Dashboard Web页面，访问的URL：`http://<ip>:18789/plugins/clawchips/dashboard`
-* 在Web页面开启的下拉选项中选择CLOUD model ID配置，预期为上一步配置的OpenClaw云端模型，然后点击保存
+默认配置的模型上下文为16k，会很容易触发压缩影响体验，需要修改一下openclaw的配置文件`/home/linaro/.openclaw/openclaw.json`
 
-![8](./res/quick_start/10.png)
+将配置的model的contexWindow修改为模型支持的最大上下文大小，如下图所示
 
-#### 2.3.3 验证 ClawChips 配置
-
-查看 `~/.openclaw/clawchips.yaml` 文件，参考配置：
-
-```yaml
-router:
-  strategy: rules
-  rules:
-    - LOCAL: rkllm/Qwen3-4B
-    - CLOUD: custom-000-00-00-00-0000/llm_model_id
-    - default: rkllm/Qwen3-4B
-
-memory:
-  enabled: true
-  top_k: 10
-  score_threshold: 0.75
-  max_query_chars: 500
-  max_prompt_chars: 200
-  per_user: false
-
-embedding:
-  type: openai-compatible
-  provider: rknn-embedding-server
-  model: rknn-embedding
-  endpoint: http://localhost:18080
-  dimensions: 2560
-
-storage:
-  max_prompt_chars: 200
-```
-
-配置参数说明：
-
-* LOCAL: rkllm/Qwen3-4B：配置为openclaw.json中声明的本地部署模型
-* CLOUD: custom-000-00-00-00-0000/llm_model_id：配置为openclaw.json中声明的云端模型
-* default: rkllm/Qwen3-4B：默认使用本地模型
-
----
-
-## 3 安装 rk-skills
-
-### 3.1 安装 skills
-
-[ClawChips开源工程](https://github.com/airockchip/clawchips )内的skills目录内置了针对端侧芯片平台精选的skill：
-
-```
-skills
-├── README.md
-├── rk-adb
-├── rk-asr
-├── rk-binary-image-decoder
-├── rk-hwc-troubleshooting
-├── rk-iva
-├── rk-model-benchmark
-└── rk-tts
-```
-
-安装方法：
-
-```bash
-# 推送skills到openclaw工作目录
-adb push path/to/clawchips/skills /home/linaro/.openclaw/workspace
-
-# 连接RK3588
-adb shell
-
-# 修改skills权限为普通用户
-chown -R linaro:linaro /home/linaro/.openclaw/workspace/skills
-
-# 切换为普通用户
-su linaro
-
-# 重启openclaw
-openclaw gateway restart
-```
-
-在后续与OpenClaw的对话过程中，OpenClaw会根据对话内容自动使用合适的skill
-
-### 3.2 安装 skills 依赖文件
-
-#### 3.2.1 系统镜像快捷部署
-
-若用户使用的是**系统镜像快捷部署**方式，需要执行如下步骤：
-
-* 修改文件权限
-
-```bash
-# 连接RK3588
-adb shell
-
-# 修改skills权限为普通用户
-chown -R linaro:linaro /userdata/skills
-
-# 切换为普通用户
-su linaro
-
-# 重启openclaw
-openclaw gateway restart
-```
-
-* 检查是否已经授权
-
-```bash
-# 连接RK3588
-adb shell
-
-# 若此2个文件存在，则已经授权
-ls /userdata/key_asr.lic
-ls /userdata/key_tts.lic
-```
-
-* 进行算法授权，若已经授权则跳过此步骤（只有rk-asr和rk-tts这两个skill才需要执行授权，授权信息可联系我司业务获取）：
-
-```bash
-# 连接RK3588
-adb shell
-
-# 执行授权
-cd /userdata/skills/ && ./rkauth.sh <username> <password>
-```
-
-#### 3.2.2 手动部署
-
-若用户使用的是**手动部署**方式，需要执行如下步骤：
-
-* 从官方路径获取依赖文件安装包skills_res.tgz，解压后可看到目录结构：
-
-```
-skills_res
-└── skills
-    ├── rk-asr
-    ├── rk-iva
-    ├── rk-tts
-    ├── rkauth.sh
-    └── rkauth_tool_bin
-```
-
-* 安装方法：
-
-```bash
-# 推送skill_res/skills到/userdata
-adb push path/to/skill_res/skills /userdata/skills
-
-# 连接RK3588
-adb shell
-
-# 修改skills权限为普通用户
-chown -R linaro:linaro /userdata/skills
-
-# 切换为普通用户
-su linaro
-
-# 重启openclaw
-openclaw gateway restart
-```
-
-* 完成算法授权（只有rk-asr和rk-tts这两个skill才需要执行授权，授权信息可联系我司业务获取）：
-
-```bash
-# 连接RK3588
-adb shell
-
-# 执行授权
-cd /userdata/skills/ && ./rkauth.sh <username> <password>
-```
+![context_window](res/quick_start/12.png)
 
 ------
 
-## 4 安装 QQBot 插件
+## 3 安装 QQBot 插件
 
-### 4.1 安装 QQBot
+推荐使用QQ插件，对于图片/语音等多媒体文件格式交互更方便。
+
+### 3.1 安装 QQBot
 
 * 访问官方网站：https://q.qq.com/qqbot/openclaw/index.html
 
@@ -615,7 +218,7 @@ openclaw gateway restart
 
 重启完成就可以⽤QQ上创建的机器⼈直接给OpenClaw发送消息
 
-### 4.2 启用QQ消息优化
+### 3.2 启用QQ消息优化（可选）
 
 同时安装ClawChips和QQBot前提下，可以启用ClawChips对QQBot的优化：
 
@@ -628,50 +231,319 @@ openclaw gateway restart
 
 ------
 
-## 5 验证部署
+### 3.3 测试验证
 
-### 5.1 检查服务状态
-
-确保 rkllm3-server 正在运行：
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 切换为普通用户
-su linaro
-
-# 检查进程
-ps aux | grep rkllm3-server
-
-# 测试 API
-curl http://127.0.0.1:8080/v1/models
-```
-
-### 5.2 测试 OpenClaw
-
-用户可以通过以下2种方式进行测试：
-
-* 通过tui接入对话
-
-```bash
-# 连接RK3588
-adb shell 
-
-# 切换为普通用户
-su linaro
-
-# tui接入对话
-openclaw tui
-
-# 开始新对话
-/new
-```
-
-* 访问ClawChips的Dashboard web页面，使用说明请参考：https://github.com/airockchip/clawchips/blob/main/README_ZH.md
+在QQ中和机器人的聊天窗口输入`/new`开启新对话，应收到机器人的打招呼回复消息，此时可以正常和开发板的OpenClaw正常进行交互。
 
 ------
 
+## 4 RK SKILL使用说明
+
+固件内置了一系列基于RK182X模组运行的ASR/TTS/VL/RAG算法，能够通过SKILL被OpenClaw进行调用，以下是当前开发的SKILL示例（这些skill位于`/home/linaro/.openclaw/workspace/skills`目录）。
+
+### 4.1 RK-VL
+
+#### 4.1.1 功能简介
+
+基于视觉大语言模型（当前基于Qwen3-VL-2B）做自然语言描述任意的目标检测与摄像头持续监控。
+
+#### 4.1.2 调用示例
+
+**示例一：对摄像头画面进行监控（需要接一个USB摄像头）**
+
+- 用户输入
+
+```
+帮我监控摄像头，当有快递出现的时候提醒我
+```
+
+- 输出说明
+
+  - 当开启监控成功后会有如下消息返回：
+
+    ```
+    已开启摄像头监控，目标为「快递」。检测到时会立即提醒你。
+    ```
+
+  - 当有检测到目标时候会有如下消息返回：
+
+    ```
+    检测到目标“一只招财猫”，图像如下：
+    <对应图片>
+    ```
+
+### 4.2 RK-TTS
+
+#### 4.2.1 功能简介
+
+支持直接在板端调用文本转语音（TTS： Text To Speech）能力，可以支持板子播放或者返回输出音频文件
+
+#### 4.2.2 调用示例
+
+**示例一：返回输出音频文件**
+
+- 用户输入
+
+```
+帮我把下面这段话转成音频：
+"夜幕笼罩着古老的城堡，月光透过彩色玻璃在地面投下斑驳光影。主人公手握烛台，沿着螺旋石阶缓缓下行，靴底与青苔覆盖的台阶摩擦发出细微声响"
+```
+
+- 输出说明
+
+预期QQ中应该能够收到对应文字转录的音频文件
+
+**示例二：直接开发板播放**
+
+- 用户输入
+
+```
+直接朗读这段话：
+"Surely we ought to hold fast to life, for it is wondrous, and full of a beauty that breaks through every pore of God’s own earth."
+```
+
+- 输出说明
+
+预期开发板应该能够播放出对应文字的音频
+
+
+### 4.3 RK-ASR
+
+#### 4.3.1 功能简介
+
+实现音频文件语音转录，传入音频文件，即可输出对应的文字识别结果。
+
+#### 4.3.2 调用示例
+
+推荐通过 QQ 机器人快速交互使用。
+
+**示例一：指定板端音频路径**
+
+- 用户输入
+
+```
+帮我转录音频文件：/userdata/40s_rkdc.wav
+```
+
+- 输出说明
+
+  - 短音频（30 秒内）：直接返回纯文字转录结果
+
+  - 长音频（超过 30 秒）：生成 TXT 文档并发送，保存完整转录内容
+
+**示例二：直接上传音频**
+
+- 用户输入
+
+直接在 QQ 聊天框直接发送音频文件
+
+- 输出说明
+
+同上
+
+### 4.4 RK-MEETING-WATCHER
+
+#### 4.4.1 功能简介
+
+支持自定义关键词，实时监听会议语音内容。依托 ASR 服务对麦克风音频流进行实时文字转写，持续匹配预设关键词。一旦检测到目标关键词，将通过 QQ 推送提醒消息，及时跟进会议关键信息。
+
+推荐通过 QQ 机器人快速交互使用。为保证监听与识别精度，建议搭配外接 USB 麦克风使用。
+
+板载麦克风及主流 USB 麦克风均依赖 `alsa-utils` 组件，需提前在设备中安装：
+
+```bash
+sudo apt update
+sudo apt install alsa-utils
+```
+
+#### 4.4.2 调用示例
+
+**示例一：会议关键词监听**
+
+- 用户输入
+
+  - 开启监听：`请帮我开启会议监听，关键词“龙虾”`
+
+  - 关闭监听：`停止会议监听`
+
+
+- 输出说明
+
+系统识别到预设关键词后，将主动推送 QQ 提醒：
+
+````
+您设置的关键词已触发，请关注会议！
+````
+
+### 4.5 RK-RAG
+
+#### 4.5.1 功能简介
+
+实现知识库检索问答，传入 Markdown 文档构建知识库，或基于已有知识库检索并回答问题。
+
+#### 4.5.2 调用示例
+
+推荐通过 QQ 机器人快速交互使用。
+
+**示例一：构建知识库**
+- 用户输入
+
+```
+帮我将 /home/linaro/.openclaw/workspace/skills/rk-rag/example/1820.md 加入 rk 知识库
+```
+
+- 输出示例
+
+```
+目标知识库：rk.db / 新增 chunk：12 条 / chunk 总数：12 条
+```
+
+**示例二：查询知识库**
+
+- 用户输入
+
+```
+根据 rk 知识库，告诉我 rk1820 支持和哪些设备协作
+```
+
+- 输出示例
+
+```
+RK1820 支持与 RK3588 和 RK3576 这类主控 SoC 设备协作。它作为协处理器，通过 PCIe 或 USB 接口连接到这些主控芯片上，专注于 AI 模型的加速计算任务。这种协作方式让系统能够更高效地运行 AI 应用，尤其是在部署像 FastVLM、Qwen2.5-VL-3B 这样的多模态模型时表现良好。
+```
+
+**示例三：列举知识库**
+
+- 用户输入
+
+```
+查看当前有哪些知识库
+```
+
+- 输出示例
+
+```
+当前知识库列表：
+  - rk.db  (documents: 2, chunks: 24)
+      source: /home/linaro/.openclaw/workspace/skills/rk-rag/example/1820.md
+      source: /home/linaro/.openclaw/workspace/skills/rk-rag/example/guide.md
+  - report.db  (documents: 1, chunks: 8)
+      source: /home/linaro/.openclaw/workspace/skills/rk-rag/example/report.md
+```
+
+#### 4.5.3 本地问答模型配置
+rk-rag 默认使用云端 LLM 生成回答，对于有隐私要求的客户，可切换为本地模型。从网盘下载 `qwen3-4b-instruct-2507` 模型，安装到板子：
+
+```bash
+adb push /path/to/qwen3-4b-instruct-2507 /userdata/model_hub
+adb push /path/to/qwen3-4b-instruct-2507/rkllm-qwen3-4b-instruct-2507-server.service /etc/systemd/system/
+```
+
+若模型文件和配置均已就绪，search 模式会自动检测并使用本地 LLM，无需其他操作。
+
+#### 4.5.4 注意事项
+- 构建知识库时，若未指定知识库名称，知识库将以文档名称命名
+- 若将文档加入已存在的知识库，文档将以追加的方式进入知识库
+- 知识库来源文档仅支持 Markdown（.md）格式
+- 需要使用文档的完整路径
+
+------
+
+## 5 本地大模型和路由体验（可选）
+
+**说明**：
+
+- 使用本地大模型作为OpenClaw的Provider当前还处于实验阶段，仅供体验。
+- 模组必须选用RK1828，RK1820模组的内存不够，无法运行。
+- 启动本地大模型之后RK1828内存基本占满，此时无法再体验SKILL中ASR/TTS/VLM/RAG等算法功能
+
+### 5.1 部署本地大模型 API 服务
+
+#### 5.1.1 部署模型文件
+
+从网盘models目录下载模型 qwen3-4b-thinking，目录结构如下：
+
+```bash
+qwen3-4b-thinking
+├─ Qwen3-4B.rknn           #RKNN 模型文件
+├─ Qwen3-4B.tokenizer.gguf #词表文件
+├─ Qwen3-4B.embed.bin      #embedding 文件
+├─ Qwen3-4B.weight         #weight 文件
+└─ run.sh                  #启动rkllm3-server的脚本
+```
+
+将模型文件推送至板端：
+
+```bash
+# 推送文件
+adb push qwen3-4b-thinking /userdata/
+# 同步文件系统
+adb shell sync
+```
+
+#### 5.1.2 启动 rkllm3-server
+
+```bash
+# 连接RK3588
+adb shell 
+
+# 切换到模型文件目录
+cd /userdata/qwen3-4b-thinking
+
+# 增加可执行权限
+chmod +x ./run.sh
+
+# 启动 rkllm3-server
+./run.sh
+```
+
+#### 5.1.3 验证 rkllm3-server
+
+启动后，通过以下命令验证服务是否正常运行：
+
+```bash
+# 在主机端执行，测试 API 是否可访问
+curl http://127.0.0.1:8080/v1/models
+
+# 预期输出示例：
+# {
+#   "object": "list",
+#   "data": [
+#     {
+#       "id": "Qwen3-4B",
+#       "object": "model",
+#       "created": 1234567890,
+#       "owned_by": "rockchip"
+#     }
+#   ]
+# }
+
+# 或者在开发板终端检查进程
+adb shell "ps aux | grep rkllm3-server"
+```
+
+### 5.2 配置 ClawChips路由
+
+#### 5.2.1 使能本地路由
+
+* OpenClaw启动后在主机端访问Dashboard Web页面，访问的URL：`http://<ip>:18789/plugins/clawchips/dashboard`
+* 使能本地路由和记忆路由
+
+
+![8](./res/quick_start/11.png)
+
+
+* 在Web页面开启的下拉选项中选择CLOUD model ID配置，预期为之前配置的OpenClaw云端模型，然后点击保存
+
+![8](./res/quick_start/10.png)
+
+####  5.2.2 本地路由使用
+
+可参考文档使用：
+
+https://github.com/airockchip/clawchips/blob/main/README_ZH.md#%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97
+
+------
 ## 附录
 
 ### 附录 A：目录结构
@@ -753,6 +625,29 @@ npm config set registry https://registry.npmmirror.com
 # 删除旧的 OpenClaw 目录后重试
 rm -rf ~/.npm-global/lib/node_modules/openclaw
 npm install -g openclaw@2026.3.24
+```
+
+**问题：局域网无法访问Dashboard web页面**
+
+解决方法：
+openclaw的gateway配置可以参考如下进行修改，但是安全性会降低需要注意：
+
+```
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://192.168.31.82:18789"
+      ],
+      "dangerouslyAllowHostHeaderOriginFallback": true,
+      "allowInsecureAuth": true,
+      "dangerouslyDisableDeviceAuth": true
+    },
+  }
 ```
 
 #### 4 rkllm3-server 问题

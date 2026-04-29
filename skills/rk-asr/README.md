@@ -1,8 +1,14 @@
 ## RK-ASR
 
+### 功能简介
+
+实现音频文件语音转录，传入音频文件，即可输出对应的文字识别结果。
+
+
+
 ### 环境要求
 
-音频格式支持依赖ffmpeg，需要现在板子上安装ffmpeg，从而支持多种音频格式。
+多格式音频解析依赖 FFmpeg，需在开发板提前安装，命令如下：
 
 ```bash
 sudo apt update
@@ -11,44 +17,29 @@ sudo apt install -y ffmpeg
 
 
 
-### 依赖安装
+### 技能配置
 
-获取打包好的demo，并放在`/userdata/skills/rk-asr/rockasr_linux_aarch64_rk3588`
-
-可在板端执行如下命令获取
-
-```bash
-wget https://ftrg.zbox.filez.com/v2/delivery/data/95f00b0fc900458ba134f8b180b3f7a1/claw_agent/skills/rk-asr/rockasr_linux_aarch64_rk3588.tgz
-mkdir -p /userdata/skills/rk-asr
-tar zxvf rockasr_linux_aarch64_rk3588.tgz -C /userdata/skills/rk-asr/
-```
-
-
-
-### skills
-
-将`SKILL.md`和`scripts`目录推到`~/.openclaw/workspace/skills/rk-asr`目录下
-
-由于openclaw默认配置whisper，建议参考当前目录下的`TOOLS.md`，修改openclaw板端配置文件`~/.openclaw/workspace/TOOLS.md`，将此技能配置为默认ASR技能
-
-
-
-### auth
-
-授权工具已打包在rockasr2 demo目录下 (`rockasr_linux_aarch64_rk3588/rkauth_tool_bin`)    
-
-- 设备可联网
-
-```
-./rkauth_tool_bin -u xxx -p xxx -o /userdata/key_asr.lic -m asr
-```
-
-- 该命令会生成授权文件，确保程序运行时能找到授权配置文件（默认为 ./demo/rockx_auth_config.json）
+将`SKILL.md`和`scripts`目录，推到3588开发板`~/.openclaw/workspace/skills/rk-asr`目录下
 
 
 
 ### 调用示例
 
+推荐通过 QQ 机器人快速交互使用。
+
+#### 用户输入
+
+1. 指定板端音频路径
+
 - 帮我转录音频文件：/home/linaro/Desktop/40s_rkdc.wav
-- QQ对话框中发送音频文件
+
+2. 直接上传音频
+
+- 在 QQ 聊天框发送音频文件
+
+#### 输出说明
+
+- 短音频（30 秒内）：直接返回纯文字转录结果
+
+- 长音频（超过 30 秒）：生成 TXT 文档并发送，保存完整转录内容
 

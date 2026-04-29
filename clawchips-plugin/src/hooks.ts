@@ -452,20 +452,6 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
 
     api.logger.info(`[ClawChips] message: ${message}`);
 
-    // TODO: If message starts with "Pre-compaction memory flush" or "Compaction safeguard", route directly to CLOUD
-    if (message.startsWith("Pre-compaction memory flush") ||
-        message.startsWith("Read HEARTBEAT.md if it exists (workspace context).") ||
-        message.startsWith("A new session was started via /new or /reset.") ||
-        message.startsWith("Compaction safeguard")) {
-      const parsed = getParsed();
-      const tierRules = parseTierRules(parsed.router.rules);
-      const cloudTarget = modelTargetForTier("CLOUD", tierRules, parsed.llms);
-      if (cloudTarget) {
-        api.logger.info(`[ClawChips] Compaction operation: routing to CLOUD ${cloudTarget.provider}/${cloudTarget.model}`);
-        return makeResult(cloudTarget.provider, cloudTarget.model);
-      }
-    }
-
     const INTERNAL_PREFIXES = ["[system]", "[internal]"];
     if (INTERNAL_PREFIXES.some((p) => message.startsWith(p))) {
       return;
@@ -487,6 +473,20 @@ export function registerHooks(api: OpenClawPluginApiLike, deps: HooksDeps): () =
       sessionStash.set(sessionKey, stash);
       api.logger.info("[ClawChips] router disabled; skipping routing");
       return;
+    }
+
+    // TODO: If message starts with "Pre-compaction memory flush" or "Compaction safeguard", route directly to CLOUD
+    if (message.startsWith("Pre-compaction memory flush") ||
+        message.startsWith("Read HEARTBEAT.md if it exists (workspace context).") ||
+        message.startsWith("A new session was started via /new or /reset.") ||
+        message.startsWith("Compaction safeguard")) {
+      const parsed = getParsed();
+      const tierRules = parseTierRules(parsed.router.rules);
+      const cloudTarget = modelTargetForTier("CLOUD", tierRules, parsed.llms);
+      if (cloudTarget) {
+        api.logger.info(`[ClawChips] Compaction operation: routing to CLOUD ${cloudTarget.provider}/${cloudTarget.model}`);
+        return makeResult(cloudTarget.provider, cloudTarget.model);
+      }
     }
 
     flushIncompleteDashboardTurn(api, deps, stash, sessionKey);

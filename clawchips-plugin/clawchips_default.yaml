@@ -3,7 +3,7 @@
 # If you use short names only (e.g. Qwen3.5-4B), declare models per provider under llms below.
 # For interactive setup, run scripts/setup.mjs manually; otherwise copy this file to ~/.openclaw/clawchips.yaml.
 router:
-  enable: true
+  enable: false
   strategy: rules
   rules:
   - LOCAL: rkllm/Qwen3-4B

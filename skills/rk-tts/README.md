@@ -2,7 +2,9 @@
 
 ### 依赖安装
 
-获取打包好的demo，并放在`/userdata/skills/rk-tts/rocktts_linux_aarch64_rk3588`
+获取打包好的demo，并放在`/userdata/skills/rk-tts/rocktts_linux_aarch64_rk3588`。
+
+该目录中需要包含原有`rocktts_demo`、用于HTTP方式调用的`tts_server`，以及server管理脚本`start_tts_server.sh`和`stop_tts_server.sh`。
 
 可在板端执行如下命令获取
 
@@ -18,13 +20,11 @@ tar zxvf rocktts_linux_aarch64_rk3588.tgz -C /userdata/skills/rk-tts/
 
 将`SKILL.md`和`scripts`目录推到`~/.openclaw/workspace/skills/rk-tts`目录下
 
-建议参考当前目录下的`TOOLS.md`，修改openclaw板端配置文件`~/.openclaw/workspace/TOOLS.md`，将此技能配置为默认TTS技能
-
 
 
 ### auth
 
-授权工具已打包在rocktts demo目录下(`rocktts_linux_aarch64_rk3588/rkauth_tool_bin`)    
+授权工具已打包在rocktts demo目录下(`rocktts_linux_aarch64_rk3588/rkauth_tool_bin`)
 
 - 设备联网后，在板子上执行
 
@@ -41,3 +41,5 @@ tar zxvf rocktts_linux_aarch64_rk3588.tgz -C /userdata/skills/rk-tts/
 - 帮我把下面这段话转成音频：
   "夜幕笼罩着古老的城堡，月光透过彩色玻璃在地面投下斑驳光影。主人公手握烛台，沿着螺旋石阶缓缓下行，靴底与青苔覆盖的台阶摩擦发出细微声响"
 
+- 直接朗读这段话：
+  "Surely we ought to hold fast to life, for it is wondrous, and full of a beauty that breaks through every pore of God’s own earth."

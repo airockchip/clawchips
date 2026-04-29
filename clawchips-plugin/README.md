@@ -1,73 +1,100 @@
 # clawchips (OpenClaw plugin)
 
-TypeScript plugin that routes each turn in **`before_model_resolve`** via `providerOverride` / `modelOverride` (no separate Python router process).
+ClawChips is an OpenClaw plugin that automatically selects local or cloud models for OpenClaw conversations based on the task. It also provides a Dashboard for viewing routing results and memory records.
 
-1. **Optional routing memory** (SQLite + embeddings) — short-circuit when similarity ≥ `memory.score_threshold`.
-2. **Heuristics + YAML `router.rules`** — maps `LOCAL` / `CLOUD` to OpenClaw `provider/model` ids.
+## ClawChips Installation
 
-## Config
+### 1. Install OpenClaw
 
-- Default: `~/.openclaw/clawchips.yaml` (seeded from bundled `clawchips_default.yaml` if missing). Override with plugin settings or `CLAWCHIPS_CONFIG`.
-- In `router.rules`, `LOCAL`, `CLOUD`, and `default` must resolve to **provider/model** strings (same as the gateway / `~/.openclaw/openclaw.json`; prefer ids containing `/`).
-
-**Optional setup wizard:** run it manually to set LOCAL / CLOUD / default and memory.
+Follow the [OpenClaw official documentation](https://docs.openclaw.ai/install) to install and configure OpenClaw. Skip this step if OpenClaw is already installed.
 
 ```bash
-node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
+npm install -g openclaw@2026.3.24
+openclaw onboard --install-daemon
 ```
 
-Enable memory in YAML (`memory.enabled`, `embedding` OpenAI-compatible endpoint, etc.) when you use routing memory.
+Note: ClawChips has been tested with OpenClaw 2026.3.24 (cff6dc9).
 
-### QQ tool-call notifications (`qq_tool_notify`)
+### 2. Install ClawChips
 
-Optional: send proactive QQ messages on `before_tool_call` / `after_tool_call` via the installed QQ Bot plugin (`sendProactive`). Configure this in **`clawchips.yaml`** as a top-level `qq_tool_notify` block (camelCase alias `qqToolNotify` is also accepted).
+#### Get the package
 
-| Field | Meaning |
-| --- | --- |
-| `enabled` | Must be `true` to activate. |
-| `openid` | Target user or group openid. |
-| *(omit or placeholder)* | If `openid` is unset, or exactly `"<user-or-group-openid>"` / `"<用户或群-openid>"`, ClawChips reads `known-users.json` under `$OPENCLAW_STATE_DIR/qqbot/data/` and `~/.openclaw/qqbot/data/`, and uses the row with the greatest **`lastSeenAt`**. |
-| `type` | `c2c` or `group` (default `c2c` when not using known-users fallback). |
-| `accountId` | QQ bot account id (default `default`). |
-| `onBefore` / `onAfter` | **Before:** default **off** — set `onBefore` or `notifyBefore` to `true` to enable. **After:** default **on** — set `onAfter` or `notifyAfter` to `false` to disable. Aliases: `notifyBefore` / `notifyAfter`. |
-| `includeToolNames` / `excludeToolNames` | Allow/deny tool names. Aliases: `onlyTools` / `skipTools`. |
-| `maxParamChars` / `maxResultChars` | Limits for argument/result text in the message. |
+Option 1: Download a release package
 
-**Plugins:** Tencent `@tencent-connect/openclaw-qqbot` (global extension `openclaw-qqbot`) or `@openclaw/qqbot`. Requires QQ channel enabled in the host config.
+Download it from the [release page](https://github.com/airockchip/clawchips/releases).
 
-**Ordering:** If both phases are enabled, the **after** send is chained after the **before** send completes, so messages tend to arrive in order on QQ.
+Option 2: Build the plugin package yourself
 
-**Debug:** `CLAWCHIPS_QQ_NOTIFY_DEBUG=1` logs failed dynamic imports for `sendProactive`.
-
-Example (`~/.openclaw/clawchips.yaml`):
-
-```yaml
-qq_tool_notify:
-  enabled: true
-  type: c2c
-  account_id: default
-  on_before: false
-  on_after: true
-```
-
-## Directives (user messages)
-
-`@model(provider/model)`, `@local` / `@edge` / `@rk` (local tier), `@cloud`; optional `session`. With memory enabled, natural-language phrases may trigger memory ops (see hooks).
-
-## Dashboard
-
-Open `/plugins/clawchips/dashboard/` on the gateway (plugin-authenticated). Build UI from `dashboard/`: `npm install && npm run build`; plugin serves `dashboard/dist`.
-
-## Build & pack
+Install dependencies before the first build:
 
 ```bash
-npm install && npm run build
+git clone https://github.com/airockchip/clawchips
+cd clawchips-plugin/
+npm install
 ```
 
-From repo root:
+For later builds, run the following command from the repository root:
 
 ```bash
 bash scripts/package_dist.sh
 ```
 
-Produces `dist/clawchips.zip` (compiled plugin, `dashboard/dist`, manifests, `clawchips_default.yaml`). Flags `--skip-plugin-build`, `--skip-dashboard-build`; see script for details.
+Copy `dist/clawchips.zip` to the development board for installation.
+
+#### Install the plugin
+
+Run the following command:
+
+```bash
+openclaw plugins install clawchips.zip
+```
+
+#### Initialize configuration
+
+Run the following command and follow the prompts:
+
+```bash
+node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
+```
+
+### 3. Restart OpenClaw
+
+```bash
+openclaw gateway restart
+```
+
+After startup, open the Dashboard Web page at: `http://<ip>:18789/plugins/clawchips/dashboard`
+
+## Usage Guide
+
+### Test routing
+
+After chatting with OpenClaw, open the `Tasks` page in the Dashboard to view routing results.
+
+You can also mark results there. Marked tasks can be viewed on the `Memory` page in the Dashboard.
+
+### Chat directives
+
+If the routing result is not what you expect, add a directive that starts with `@` in the chat message to choose a model or route to a specific tier. The following directives are currently supported.
+
+- `@model(model-id)`
+
+Example:
+
+```text
+@model(Qwen3.6-Plus) Write a SKILL that can send and receive emails
+```
+
+- `@local` / `@cloud`
+
+Examples:
+
+```text
+@local Hello
+```
+
+```text
+@cloud Write a SKILL that can send and receive emails
+```
+
+Directive settings are remembered and will affect future selections. You can view them on the `Memory` page in the Dashboard.

@@ -3,7 +3,7 @@
 
   <h1 align="center"><strong style="color:rgb(202, 31, 31);">ClawChips</strong></h1>
 
-**ClawChips**: An open source solution for optimizing OpenClaw deployments on edge devices
+**ClawChips**: An open source solution for deploying and optimizing OpenClaw on edge devices
 
 **English | [中文](./README_ZH.md)**
 
@@ -11,24 +11,79 @@
 
 ---
 
-**Note**: The current release is v0.5.0 technical preview; a stable release is coming soon.
+**Note**: The current release is a technical preview and is still being optimized and iterated.
 
 ## About ClawChips
 
-The ClawChips open source project is a reference solution for edge deployment and optimizing OpenClaw. It provides an intelligent edge-cloud routing gateway, a curated set of practical edge-side skills, a visual dashboard, and more to improve the experience of using OpenClaw on edge platforms.
+ClawChips is an open source reference solution for deploying and optimizing OpenClaw on edge devices. It provides a series of edge-side algorithm SKILLs; ModelHub, an edge algorithm scheduling service; an intelligent edge-cloud routing gateway; a visual Dashboard; and more to improve the experience of using OpenClaw on edge platforms.
 
 | Feature | Description |
 | --- | --- |
-| **Local / Cloud Intelligent Routing** | Intelligently detects task complexity and automatically dispatches requests between local and cloud models to reduce token usage. |
-| **Feedback-Driven Memory** | Writes request history and feedback labels into memory to improve later routing decisions for similar requests. |
-| **SKILLS** | Includes a curated collection of practical edge-side skills, with more to come over time. |
-| **Dashboard** | Provides routing statistics, runtime configuration, provider management, feedback labeling, and memory inspection. |
+| **SKILLS** | A set of built-in edge algorithm SKILLs delivering localized speech, vision, knowledge-base, and related capabilities. |
+| **ModelHub** | A gateway for managing and scheduling algorithm models so SKILLs can easily connect to algorithm services. |
+| **Edge-Cloud Intelligent Routing (Experimental)** | Intelligently identifies task complexity and automatically dispatches requests between local and cloud models to save token usage; supports memory-based routing to continuously improve routing decisions. |
+| **Dashboard** | Provides routing statistics, runtime configuration, feedback labeling, and memory inspection. |
 
 ---
 
-## Edge-Cloud Routing
+## SKILLS
 
-ClawChips includes a local routing gateway that sits between OpenClaw and multiple model backends.
+The [skills](./skills/README.md) directory includes a series of SKILLs for edge chip platform capabilities; they are continuously being adapted, expanded, and refined. Developer contributions are welcome.
+
+The following Skill application examples cover ASR (speech recognition), TTS (speech synthesis), and VLM (vision-language model) algorithm services deployed via ModelHub, and can be used as references for further development.
+
+| Skill | Directory | Function | Typical Use |
+|---|---|---|---|
+| `rk-asr` | `rk-asr/` | Transcribes audio files to text. | Speech-to-text, audio transcription, or retrieving speech recognition results. |
+| `rk-tts` | `rk-tts/` | Converts text to audio. | Text-to-speech, audio generation, or reading text aloud on the device. |
+| `rk-vl` | `rk-vl/` | Performs natural-language target detection on images using a VLM, with support for continuous camera monitoring and alerts. | Detecting and monitoring naturally described targets such as parcels and deliveries, or falls by seniors, from images or cameras. |
+| `rk-rag` | `rk-rag/` | Builds and queries a knowledge base. | Importing documents into a local vector database and performing retrieval QA on specified knowledge bases. |
+| `rk-meeting-watcher` | `rk-meeting-watcher/` | Listens to meeting audio in real time, transcribes it with ASR, matches configured keywords, and sends alerts when keywords are hit. | Monitoring important meeting keywords and receiving timely notifications. |
+
+## ModelHub
+
+ModelHub is ClawChips' local model service scheduling gateway for RK edge chips. It is used to manage algorithm model services available on the board and provide a stable invocation entry point for SKILLs, OpenClaw plugins, and other local applications.
+
+It sits between application logic and concrete model services, handling task queues, model service startup, health checks, request forwarding, and result queries based on device resources and service status. Upper-layer SKILLs do not need to care whether a model has started, whether the device is busy, or how service ports are allocated. They only need to submit tasks through a unified API.
+
+ModelHub supports:
+
+- Describing RK3588, RK1820/RK1828, and other devices and their model services with YAML
+- Scheduling tasks based on device concurrency and model VRAM / memory usage to avoid resource contention from multiple heavy models
+- Automatically running model service start, stop, and health-check commands
+- Forwarding HTTP requests to target model services, compatible with OpenAI-style local model APIs
+
+A typical invocation chain is shown below:
+
+```text
+┌─────────────────────┐     ┌─────────────────────┐
+│        SKILL        │     │   OpenClaw Plugin   │
+└──────────┬──────────┘     └──────────┬──────────┘
+           │                           │
+           └─────────────┬─────────────┘
+                         │
+                         ▼
+                ┌─────────────────┐
+                │    ModelHub     │
+                │ Scheduler / API │
+                └────────┬────────┘
+                         │
+       ┌─────────────────┼─────────────────┬─────────────────┐
+       │                 │                 │                 │
+       ▼                 ▼                 ▼                 ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│     ASR     │   │     TTS     │   │     VLM     │   │  Embedding  │
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+```
+
+**Notes**
+
+- For more installation, configuration, and client invocation examples, see [model_hub_py](./model_hub_py/README.md).
+- Built-in ASR, TTS, VLM, and related algorithm models are included in ClawChips firmware; see [ClawChips_Quick_Start](./ClawChips_Quick_Start.md) for environment setup.
+
+## Edge-Cloud Routing (Experimental)
+
+The ClawChips plugin includes a locally running intelligent routing gateway that sits between OpenClaw and multiple model backends.
 
 - Intelligently detects task complexity and routes task requests between local and cloud via the local intelligent router
 - Supports memory-assisted routing for continuously improved routing decisions
@@ -57,19 +112,19 @@ ClawChips includes a local routing gateway that sits between OpenClaw and multip
                                                                └─────────────────────────┘
 ```
 
+For more installation, configuration, and usage examples, see [clawchips-plugin](./clawchips-plugin/README.md).
+
+**Note**: Using a local LLM as an OpenClaw provider is still experimental and intended for evaluation only.
+
 ---
 
 ## Dashboard Features
 
-The gateway includes a dashboard for convenient configuration. A demo is shown below:
+The gateway provides a Dashboard for convenient backend configuration and statistics viewing. A demo is shown below:
 
 ![Dashboard Preview](res/dashboard.gif)
 
 ---
-
-## SKILLS
-
-The [skills](./skills) directory includes curated practical skills for edge chip platforms; more will be adapted and expanded over time. Developer contributions are welcome.
 
 ## Installation Guide
 
@@ -79,154 +134,9 @@ The [skills](./skills) directory includes curated practical skills for edge chip
 
 ### Quick Start
 
-For the full development board environment setup and installation process, see [ClawChips_Quick_Start](./ClawChips_Quick_Start.md).
+For the full development board environment setup and installation process, see *[ClawChips_Quick_Start](./ClawChips_Quick_Start.md)*.
 
-### ClawChips Installation Steps
-
-#### 1. Install OpenClaw
-
-Please follow the [OpenClaw official documentation](https://docs.openclaw.ai/install) to install and configure OpenClaw. If it is already installed, you can skip this step.
-
-```
-npm install -g openclaw@2026.3.24
-openclaw onboard --install-daemon
-```
-
-Note: ClawChips is currently tested with OpenClaw `2026.3.24 (cff6dc9)`.
-
-#### 2. Install ClawChips
-
-- Obtain the package
-
-**Option 1:** Download a release package directly
-
-Visit the [releases page](https://github.com/airockchip/clawchips/releases) to download.
-
-**Option 2:** Build the plugin package yourself
-
-For the first build, install the required dependencies:
-
-```bash
-git clone https://github.com/airockchip/clawchips
-cd clawchips-plugin/
-npm install
-```
-
-For each subsequent build, from the project root, run:
-
-```
-bash scripts/package_dist.sh
-```
-
-Copy `dist/clawchips.zip` to your development board for installation.
-
-- Install
-
-Run the following command to install:
-
-```
-openclaw plugins install clawchips.zip
-```
-
-- Initial configuration
-
-Follow the prompts and run the following command to initialize the configuration:
-
-```
-node ~/.openclaw/extensions/clawchips/scripts/setup.mjs
-```
-
-#### 3. Install memory routing dependencies (Optional)
-
-If you enable memory-based routing, you also need to deploy an embedding model service locally on the RK3588 as follows. If you are using the provided firmware image, this service may already be included, and you only need to confirm that it is running properly.
-
-```
-cd /userdata/
-curl -fsSL https://raw.githubusercontent.com/airockchip/clawchips/main/scripts/install_memory_router_deps.sh | bash -s --
-```
-
-Confirm that the service is running properly:
-
-```
-journalctl -u embedding-rknn-server.service
-# If you see logs like the following, the service started successfully
-I:        Application startup complete.
-I:        Uvicorn running on http://0.0.0.0:18080 (Press CTRL+C to quit)
-```
-
-#### 4. Restart OpenClaw
-
-```
-openclaw gateway restart
-```
-
-After startup, you can access the Dashboard web UI at `http://<ip>:18789/plugins/clawchips/dashboard`.
-
-## User Guide
-
-### Try the routing feature
-
-After chatting with OpenClaw, open the `Tasks` page in the dashboard:
-
-![Dashboard Tasks](res/dashboard-tasks.png)
-
-You can also label results here; labeled items can be viewed on the `Memory` page in the dashboard:
-
-![Dashboard Memory](res/dashboard-memory.png)
-
-### Chat directives
-
-If you are not satisfied with the routing result, you can add directives starting with `@` in the chat to choose a model or routing tier directly. The following directives are supported:
-
-- `@model(model-id)`
-
-Example:
-
-```
-@model(Qwen3.6-Plus) Please write a SKILL that can send and receive email
-```
-
-- `@local` / `@cloud`
-
-Example:
-
-```
-@local Hello
-```
-
-```
-@cloud Please write a SKILL that can send and receive email
-```
-
-After a directive is set, it is remembered and affects the next selection; you can review this on the `Memory` page in the dashboard.
-
----
-
-## FAQ
-
-- Cannot access the Dashboard web page from the LAN
-
-You can adjust the OpenClaw gateway configuration as shown below. Note that this reduces security:
-
-```
-  "gateway": {
-    "port": 18789,
-    "mode": "local",
-    "bind": "lan",
-    "controlUi": {
-      "allowedOrigins": [
-        "http://localhost:18789",
-        "http://127.0.0.1:18789",
-        "http://192.168.31.82:18789"
-      ],
-      "dangerouslyAllowHostHeaderOriginFallback": true,
-      "allowInsecureAuth": true,
-      "dangerouslyDisableDeviceAuth": true
-    },
-  }
-```
-
-## Join us — developers, explore countless possibilities together
+## Join us, developers: explore countless possibilities together
 
 To fully support efficient development and innovation, we offer a dedicated co-creation support program. Scan the QR code below to apply for complimentary loan of an RK3588 + RK1828 development kit. Based on your submission quality and fit, we will offer enterprises and developers a one-month hands-on kit experience so you can more easily explore the full capabilities of ClawChips and refine high-quality skills.
 
