@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>RKClawServer</title>
+  <link rel="icon" type="image/png" href="/webui/assets/logo.png?v=20260811-export1">
+  <link rel="stylesheet" href="/webui/assets/styles.css?v=20260811-export1">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <main id="login-view" class="login-shell">
+    <section class="login-card">
+      <img class="login-logo" src="/webui/assets/logo.png?v=20260811-export1" width="64" height="64" alt="RKClawServer Logo">
+      <p class="eyebrow">RKCLAW SERVER</p>
+      <h1>RKClawServer</h1>
+      <p class="muted">查看推理状态、定位会话问题，并安全地更新运行配置。</p>
+      <form id="login-form">
+        <label for="token">管理员 Token</label>
+        <input id="token" name="token" type="password" autocomplete="current-password" required>
+        <button class="primary wide" type="submit">进入控制台</button>
+        <p id="login-error" class="form-error" role="alert"></p>
+      </form>
+    </section>
+  </main>
+
+  <div id="app-view" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <img class="brand-logo" src="/webui/assets/logo.png?v=20260811-export1" width="32" height="32" alt="">
+        <div><strong>RKClawServer</strong><small>CONTROL CENTER</small></div>
+      </div>
+      <nav aria-label="主导航">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="sessions">会话日志</button>
+        <button class="nav-item" data-view="logs">Server 日志</button>
+        <button class="nav-item" data-view="config">Server 配置</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="status-line"><i id="side-dot"></i><span id="side-status">连接中</span></div>
+        <button id="logout" class="ghost">退出登录</button>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <h2 id="page-title">Dashboard</h2>
+        </div>
+        <div class="top-actions">
+          <button id="refresh" class="icon-button" title="刷新当前页面" aria-label="刷新当前页面">↻</button>
+        </div>
+      </header>
+
+      <section id="view-dashboard" class="view active-view">
+        <div class="hero-status panel">
+          <div>
+            <div class="runtime-title"><i id="runtime-dot"></i><h3 id="runtime-state">Loading</h3></div>
+            <p id="runtime-copy" class="muted">正在读取模型服务状态…</p>
+            <p class="runtime-model">模型：<strong id="runtime-model">—</strong></p>
+          </div>
+          <div class="range-switch" role="group" aria-label="统计时间范围">
+            <button data-range="1h">1H</button>
+            <button class="active" data-range="24h">24H</button>
+            <button data-range="7d">7D</button>
+            <button data-range="30d">30D</button>
+          </div>
+        </div>
+        <div id="metric-grid" class="metric-grid"></div>
+        <div class="dashboard-grid">
+          <article class="panel chart-panel">
+            <div class="panel-head"><div><h3>请求趋势</h3></div><span id="chart-caption" class="muted">每分钟</span></div>
+            <canvas id="trend-chart" height="260" aria-label="请求趋势图"></canvas>
+          </article>
+          <article class="panel live-panel">
+            <div class="panel-head"><div><h3>实时执行</h3></div></div>
+            <div class="live-number"><span id="active-count">0</span><small>执行中</small></div>
+            <div class="queue-track"><span id="queue-fill"></span></div>
+            <div class="queue-meta"><span>等待队列</span><strong id="queued-count">0</strong></div>
+            <div class="queue-meta"><span>运行时间</span><strong id="uptime">—</strong></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="view-sessions" class="view">
+        <div class="toolbar panel">
+          <input id="session-query" type="search" placeholder="搜索会话摘要、ID 或模型">
+          <select id="session-status" aria-label="状态筛选">
+            <option value="">全部状态</option>
+            <option value="success">成功</option>
+            <option value="error">错误</option>
+            <option value="cancelled">已取消</option>
+          </select>
+          <button id="search-sessions" class="primary">查询</button>
+        </div>
+        <div id="session-disabled" class="empty panel hidden"></div>
+        <div class="panel table-panel">
+          <table>
+            <thead><tr><th>会话</th><th>模型</th><th>请求</th><th>INPUT TOKENS</th><th>OUTPUT TOKENS</th><th>状态</th><th>最近活动</th></tr></thead>
+            <tbody id="session-rows"></tbody>
+          </table>
+          <button id="more-sessions" class="ghost wide hidden">加载更多</button>
+        </div>
+      </section>
+
+      <section id="view-logs" class="view">
+        <div class="toolbar panel">
+          <select id="log-level" aria-label="日志级别">
+            <option value="">全部级别</option><option>DEBUG</option><option>INFO</option>
+            <option>WARNING</option><option>ERROR</option><option>CRITICAL</option>
+          </select>
+          <input id="log-query" type="search" placeholder="过滤日志内容">
+          <button id="pause-logs" class="ghost">暂停</button>
+          <button id="clear-log-view" class="ghost">清空视图</button>
+        </div>
+        <div class="terminal panel">
+          <div class="terminal-head"><span></span><span></span><span></span><small>server.log</small></div>
+          <div id="log-lines" class="log-lines" role="log" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="view-config" class="view">
+        <div class="config-layout">
+          <div class="panel config-main">
+            <div class="panel-head">
+              <div><h3>运行配置</h3></div>
+              <div class="tabs"><button id="form-tab" class="active">表单</button><button id="raw-tab">TOML</button></div>
+            </div>
+            <div id="config-form" class="config-form"></div>
+            <textarea id="toml-editor" class="code-editor hidden" spellcheck="false" aria-label="TOML 配置"></textarea>
+          </div>
+          <aside class="panel config-actions">
+            <h3>保存与应用</h3>
+            <p class="muted">先校验并保存配置，再在合适的维护窗口重新加载模型。</p>
+            <div id="config-state" class="config-state">尚未加载配置</div>
+            <button id="validate-config" class="ghost wide">校验配置</button>
+            <button id="save-config" class="primary wide">保存配置</button>
+            <button id="reload-model" class="danger wide">重新加载模型</button>
+            <div id="reload-progress" class="reload-progress hidden"></div>
+          </aside>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <dialog id="session-dialog">
+    <div class="dialog-head">
+      <div class="session-dialog-heading">
+        <h3 id="dialog-title">会话详情</h3>
+        <div class="tabs session-log-tabs" role="tablist" aria-label="会话日志类型">
+          <button id="session-api-tab" class="active" type="button" role="tab" aria-selected="true">API 日志</button>
+          <button id="session-model-tab" type="button" role="tab" aria-selected="false">MODEL 日志</button>
+        </div>
+      </div>
+      <div class="dialog-head-actions">
+        <button id="export-session" class="ghost" type="button">导出 JSON</button>
+        <button id="close-dialog" class="icon-button" type="button" aria-label="关闭">×</button>
+      </div>
+    </div>
+    <div id="session-detail" class="session-detail"></div>
+  </dialog>
+
+  <dialog id="file-dialog" class="file-dialog">
+    <div class="dialog-head">
+      <div>
+        <h3 id="file-dialog-title">选择设备端路径</h3>
+      </div>
+      <button id="close-file-dialog" class="icon-button" aria-label="关闭">×</button>
+    </div>
+    <div class="file-browser-body">
+      <div class="file-browser-toolbar">
+        <button id="file-parent" class="ghost" type="button" title="上级目录">↑</button>
+        <input id="file-browser-path" type="text" aria-label="当前设备路径">
+        <button id="file-browser-go" class="ghost" type="button">前往</button>
+      </div>
+      <div id="file-browser-list" class="file-browser-list"></div>
+      <p id="file-browser-note" class="muted file-browser-note"></p>
+      <div class="dialog-actions">
+        <button id="choose-current-directory" class="primary" type="button">选择当前目录</button>
+        <button id="cancel-file-dialog" class="ghost" type="button">取消</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="/webui/assets/app.js?v=20260811-export1"></script>
+</body>
+</html>

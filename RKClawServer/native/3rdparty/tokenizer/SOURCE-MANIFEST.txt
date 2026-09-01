@@ -1,0 +1,8 @@
+repository = https://github.com/airockchip/rknn3-model-zoo.git
+commit = 174e44c77230735b1458946debb62b3982c1ee58
+license = Apache-2.0
+build_type = Release
+x86_64.compiler = c++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+x86_64.sha256 = ac898ea2d736dbb9019bd3885788eed66377c36cb5558fd93f260154714d867e
+aarch64.compiler = aarch64-none-linux-gnu-g++ (GNU Toolchain for the A-profile Architecture 10.3-2021.07 (arm-10.29)) 10.3.1 20210621
+aarch64.sha256 = 938ec8ba8a1446aa4d10bc6e5d6fa78ffe23851808e9eabaf1e3a86ea9e5ed31

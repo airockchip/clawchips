@@ -1,9 +1,0 @@
-{
-  "name": "clawchips",
-  "private": true,
-  "scripts": {
-    "package": "bash scripts/package_dist.sh",
-    "package:dist": "bash scripts/package_dist.sh",
-    "package:skip-build": "bash scripts/package_dist.sh --skip-dashboard-build"
-  }
-}

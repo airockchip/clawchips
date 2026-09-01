@@ -1,7 +1,0 @@
-.venv/
-.pytest_cache/
-build/
-dist/
-src/model_hub_py.egg-info/
-__pycache__/
-*.pyc

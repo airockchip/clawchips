@@ -1,35 +1,25 @@
-# Byte-compiled / cache
+# Python and native build outputs
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
-.Python
-
-# Virtual environments
+*.egg-info/
+.pytest_cache/
 .venv/
 venv/
-.env
-.env.*
-
-# Node / npm (dashboard & plugin)
-node_modules/
-**/node_modules/
-
-# localrouter dashboard: Vite 依赖与构建产物（运行只需 static/dashboard）
-localrouter/dashboard/node_modules/
-localrouter/static/dashboard/
-
-# Vite / tooling cache
-**/.vite/
-.rpt2_cache/
-
-# 打包输出目录（zip 等）
-/dist/
+build/
 dist/
 
-# OS / IDE
+# Local configuration and editor files
+.env
+.env.*
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# RKClawServer local release output and dependency caches
+RKClawServer/release/*.tar.gz
+RKClawServer/release/*.sha256
+RKClawServer/build/
+RKClawServer/dist/

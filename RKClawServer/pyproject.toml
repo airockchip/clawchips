@@ -1,0 +1,44 @@
+[project]
+name = "rk-claw-server"
+version = "0.3.2"
+description = "RKClawServer: an OpenAI-compatible inference server backed by RKNN3 Toolkit Lite."
+requires-python = ">=3.10"
+dependencies = [
+    "anyio>=4.0",
+    "tomli>=2.0; python_version < '3.11'",
+    "fastapi>=0.110",
+    "httpx>=0.27",
+    "jinja2>=3.1",
+    "numpy>=1.24",
+    "uvicorn[standard]>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["gateway*"]
+
+[tool.setuptools.package-data]
+"gateway._native" = ["*.so"]
+
+"gateway" = [
+    "webui_assets/*.html",
+    "webui_assets/*.css",
+    "webui_assets/*.js",
+    "webui_assets/*.png",
+]
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+release = [
+    "Cython>=3.0,<4",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]

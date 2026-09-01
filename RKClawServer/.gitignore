@@ -1,0 +1,8 @@
+.pyc
+__pycache__
+dist/
+build/
+!native/3rdparty/tokenizer/lib/Linux/*/libtokenizer.a
+*.egg-info/
+gateway/_native/*.so
+.DS_Store

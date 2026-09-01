@@ -1,0 +1,81 @@
+[server]
+host = "0.0.0.0"
+port = 8081
+queue_size = 32
+enable_streaming = true
+
+[runtime]
+target = "rk1820"
+device_id = "0003:31:00.0"
+core_mask = 255
+native_library = ""
+
+[model]
+id = "AgentModel"
+rknn_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.rknn"
+weight_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.weight"
+tokenizer_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.tokenizer.gguf"
+embed_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.embed.bin"
+chat_template_file = ""
+max_context_tokens = 61440
+max_new_tokens = 4096
+enable_thinking = true
+clear_kv_cache = false
+kv_cache_dir = "/userdata/RKClawServer/kv_cache"
+kv_cache_system_marker = "## Runtime\nLinux aarch64, Python 3.11.2"
+
+[sampling]
+temperature = 0.0
+top_p = 0.95
+top_k = 1
+repeat_penalty = 1.0
+frequency_penalty = 0.0
+presence_penalty = 0.0
+
+[reasoning]
+separate_output = true
+fallback_delimiter = "\n\n\n"
+
+[tool_call_correction]
+enabled = true
+
+[xgrammar]
+enabled = true
+model_structure = "qwen3.5"
+debug = false
+
+[native_sampling]
+enabled = true
+# -1 chooses a fresh native sampler seed for each request.
+seed = -1
+# Number of generated tokens tracked by repeat penalty.
+repeat_last_n = 64
+# Match RKNN sampling by default: do not repeat-penalize the linefeed token.
+penalize_newline = false
+
+[logging]
+debug_logs = true
+# Optional detail log targets: off, logger, file, both.
+# If omitted, debug_logs=true defaults all four to logger; debug_logs=false defaults them to off.
+logger_detail_log_max_chars = 4096
+openai_request_log = "off"
+llm_input_log = "logger"
+llm_output_log = "logger"
+openai_response_log = "off"
+# WebUI session history is independent from the legacy detail-log targets above.
+session_logs_enabled = false
+session_retention_days = 30
+# Empty disables the WebUI Server-log viewer.
+server_log_path = "logs/server.log"
+server_log_max_bytes = 10485760
+server_log_backup_count = 5
+
+[webui]
+# Disabled by default for backwards compatibility. Set an administrator token
+# through RKCLAW_WEBUI_TOKEN (preferred) or auth_token before enabling.
+enabled = false
+auth_token = ""
+data_path = "logs/webui.sqlite3"
+stats_retention_days = 90
+reload_drain_timeout_s = 300
+session_cookie_ttl_s = 28800

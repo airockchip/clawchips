@@ -1,0 +1,88 @@
+ARG PYTHON_IMAGE=python:3.11-slim-bookworm
+FROM ${PYTHON_IMAGE} AS builder
+
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && apt-get install -y --no-install-recommends build-essential file \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG CYTHON_SPEC="Cython>=3.0,<4"
+RUN python -m pip install "${CYTHON_SPEC}" "setuptools>=68" wheel
+
+ARG WHEEL_PLATFORM=linux_aarch64
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    RKCLAW_CYTHONIZE=1 \
+    RKCLAW_CYTHON_BUILD_DIR=build/cython \
+    RKCLAW_CYTHON_JOBS=4 \
+    RKCLAW_WHEEL_PLATFORM=${WHEEL_PLATFORM} \
+    CFLAGS="-O3 -g0"
+
+WORKDIR /src
+COPY pyproject.toml setup.py ./
+COPY gateway ./gateway
+
+RUN test -f gateway/_native/librkclaw_native.so \
+    && file gateway/_native/librkclaw_native.so
+
+RUN python -m pip wheel . \
+    --no-deps \
+    --no-build-isolation \
+    --wheel-dir /out
+
+ARG STRIP_RELEASE=1
+RUN if [ "${STRIP_RELEASE}" = "1" ]; then \
+      mkdir -p /tmp/rkclaw-wheel-unpack; \
+      python -m wheel unpack /out/rk_claw_server-*.whl \
+        --dest /tmp/rkclaw-wheel-unpack; \
+      wheel_root="$(find /tmp/rkclaw-wheel-unpack -mindepth 1 -maxdepth 1 -type d -print -quit)"; \
+      find "${wheel_root}/gateway" -type f -name '*.so' \
+        -exec strip --strip-unneeded '{}' +; \
+      rm /out/rk_claw_server-*.whl; \
+      python -m wheel pack "${wheel_root}" --dest-dir /out; \
+    fi
+
+RUN python - <<'PY'
+from pathlib import Path
+from zipfile import ZipFile
+
+wheel = next(Path("/out").glob("rk_claw_server-*.whl"))
+with ZipFile(wheel) as archive:
+    names = set(archive.namelist())
+    expected = {
+        ".".join(path.with_suffix("").parts): path
+        for path in Path("gateway").rglob("*.py")
+        if path.name not in {"__init__.py", "__main__.py"}
+    }
+    missing = []
+    leaked = []
+    for module, source in expected.items():
+        prefix = module.replace(".", "/") + "."
+        if not any(name.startswith(prefix) and name.endswith(".so") for name in names):
+            missing.append(module)
+        if str(source) in names:
+            leaked.append(str(source))
+    assert not missing, f"missing Cython modules: {missing}"
+    assert not leaked, f"Python sources were packaged: {leaked}"
+    assert "gateway/__init__.py" in names
+    assert "gateway/__main__.py" in names
+    assert "gateway/_native/librkclaw_native.so" in names
+print(f"verified Cython wheel: {wheel.name}")
+PY
+
+# Install and import under the target architecture so an invalid ABI or CPU
+# architecture fails during the image build rather than on the board.
+RUN python -m pip install /out/rk_claw_server-*.whl
+WORKDIR /tmp
+RUN python - <<'PY'
+import gateway.app
+import gateway.config
+import gateway.runtime.rknn3
+import gateway.service
+
+modules = (gateway.app, gateway.config, gateway.runtime.rknn3, gateway.service)
+assert all(module.__file__.endswith(".so") for module in modules)
+print("target-architecture import check passed")
+PY
+
+FROM scratch AS artifact
+COPY --from=builder /out/ /

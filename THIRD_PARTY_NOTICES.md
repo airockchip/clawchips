@@ -1,35 +1,18 @@
-# Third-Party Notices
+# Third-party notices
 
-This repository, `ClawChips`, references and is inspired by several open-source projects in the OpenClaw / LLM routing ecosystem.
+ClawChips is distributed under the MIT License. The `RKClawServer/` source
+tree is also MIT-licensed. Bundled or referenced components retain their
+upstream licenses:
 
-This file is provided to document those upstream projects, acknowledge their authors, and help preserve attribution where code structure, ideas, or implementation patterns may have been informed by them.
+| Component | Source | Revision | License | Distribution in this repository |
+| --- | --- | --- | --- | --- |
+| RKClawServer | <https://github.com/airockchip/RKClawServer> | `v0.3.2-source.1` | MIT | Full public source |
+| XGrammar | <https://github.com/mlc-ai/xgrammar> | `557becfb64c503ae9c04344b0047661f43f44320` | Apache-2.0 | Expanded source under `RKClawServer/native/3rdparty/xgrammar` |
+| RKNN3 Tokenizer | <https://github.com/airockchip/rknn3-model-zoo/tree/main/tokenizer> | `174e44c77230735b1458946debb62b3982c1ee58` | Apache-2.0 | Header and Linux aarch64/x86_64 static libraries |
+| Nanobot | <https://github.com/HKUDS/nanobot> | RK branch commit recorded in `release-manifest.yaml` | MIT | Referenced by the product package; source is not copied here |
 
-## Scope
-
-The projects listed below are reference projects for architecture, routing design, integration approach, dashboard ideas, or implementation details.
-
-If any source files in this repository contain direct copies or adapted portions of upstream code, maintainers should preserve the relevant upstream copyright and license notices in those files where appropriate.
-
-## Referenced Open-Source Projects
-
-| Project | Repository | License |
-| --- | --- | --- |
-| OpenClaw | https://github.com/openclaw/openclaw | MIT |
-| EdgeClaw | https://github.com/OpenBMB/EdgeClaw | MIT |
-| UncommonRoute | https://github.com/CommonstackAI/UncommonRoute | MIT (please re-verify upstream before redistribution of copied code) |
-| ClawRouter | https://github.com/BlockRunAI/ClawRouter | MIT |
-| LLMRouter | https://github.com/ulab-uiuc/LLMRouter | MIT |
-
-## Attribution Guidance For Maintainers
-
-If you later confirm that any file in this repository includes copied or closely adapted upstream code, it is recommended to add a short source notice in that file, for example:
-
-```text
-Portions of this file are derived from <project-name>
-Repository: <upstream-url>
-License: MIT
-```
-
-## No Additional Warranty
-
-Third-party open-source components and referenced works remain subject to their respective upstream licenses. This notice is for attribution and record-keeping purposes and does not replace the original license terms of those projects.
+The imported RKClawServer tree includes the applicable license texts and
+Tokenizer build provenance. XGrammar also includes its own nested third-party
+license files. Models, RKNN3 Toolkit Lite, Nanobot packages, and board-side
+Skills are not redistributed by this Git repository and remain subject to
+their own release terms.

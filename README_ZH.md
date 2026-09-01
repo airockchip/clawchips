@@ -1,156 +1,97 @@
 <div align="center">
   <img src="res/logo.png" width="300" alt="ClawChips logo" />
+  <h1>ClawChips 0.7.0</h1>
 
-  <h1 align="center"><strong style="color:rgb(202, 31, 31);">ClawChips</strong></h1>
-
-**ClawChips**: 面向端侧部署优化OpenClaw的开源解决方案
+面向 Rockchip RK3588 + RK1820/RK1828 的开源端侧 Agent 方案。
 
 **[English](./README.md) | 中文**
-
 </div>
 
----
+## 0.7.0 版本变化
 
-**说明**：当前版本为技术预览版，还在不断迭代更新优化体验。
+ClawChips 现使用 **Nanobot RK 0.2.2** 作为 Agent Harness，使用
+**RKClawServer 0.3.2** 在端侧运行 LLM。旧 OpenClaw 插件、端云智能路由、
+插件 Dashboard、ModelHub API 和仓库内 Skills 已移除。
 
-## 关于 ClawChips
+```text
+浏览器 / 通讯渠道
+        │
+        ▼
+Nanobot WebUI :8765 ── Nanobot Gateway :18790
+        │  OpenAI 兼容请求
+        ▼
+RKClawServer :8081 ── RKNN3 Toolkit Lite ── RK1820/RK1828
+```
 
-ClawChips开源项目是一套面向端侧部署和优化OpenClaw的开源参考解决方案。提供了一系列端侧算法SKILL，ModelHub端侧算法调度服务，智能端云路由网关，可视化Dashboard等功能，优化在端侧平台使用OpenClaw的体验。
+RKClawServer 提供 OpenAI 兼容 Chat Completions、流式输出、ToolCall 错误
+矫正、KV-Cache 保存加载、基于 XGrammar 的结构化生成，以及地址为
+`http://<设备 IP>:8081/webui/` 的独立 WebUI。
 
-| 功能 | 说明 |
+## 仓库内容
+
+- [`RKClawServer/`](./RKClawServer/README.md)：从 `v0.3.2-source.1` 导入的
+  源码，已展开 XGrammar，默认携带 Linux aarch64/x86_64 Tokenizer 静态库。
+- [`ClawChips_Quick_Start.md`](./ClawChips_Quick_Start.md)：完整 V0.7.0 中文
+  安装、配置、使用和排障指南。
+- [`release-manifest.yaml`](./release-manifest.yaml)：固定的上游 commit 和
+  预编译库 SHA256。
+
+Nanobot、模型、RKNN3 Toolkit Lite，以及部署到 `/userdata/skills` 的板端
+算法资源由离线产品发布包提供，不包含在本 Git 源码仓库中。
+
+## 从源码构建 RKClawServer
+
+默认 native 构建直接使用仓库内 Tokenizer 预编译库，不访问网络；XGrammar
+源码也已在本仓库展开。
+
+```bash
+cd RKClawServer
+
+# x86_64 开发构建
+NATIVE_BUILD_MODE=native ./scripts/build_native.sh
+
+# aarch64 交叉构建
+CROSS_COMPILE=/opt/toolchains/bin/aarch64-linux-gnu- \
+  ./scripts/build_native.sh
+```
+
+在开发板实际运行推理仍需要 Toolkit Lite。离线发布包部署和模型配置请参考
+[快速开始](./ClawChips_Quick_Start.md)。
+
+### 从公开源码重建 Tokenizer
+
+随仓库提供的预编译库可从
+[`airockchip/rknn3-model-zoo/tokenizer`](https://github.com/airockchip/rknn3-model-zoo/tree/main/tokenizer)
+固定 commit 重建：
+
+```bash
+cd RKClawServer
+./scripts/build_tokenizer.sh --arch x86_64
+CROSS_COMPILE=/opt/toolchains/bin/aarch64-linux-gnu- \
+  ./scripts/build_tokenizer.sh --arch aarch64
+
+# native 构建显式使用重建产物
+TOKENIZER_ROOT="$PWD/build/deps/tokenizer-x86_64" \
+NATIVE_BUILD_MODE=native ./scripts/build_native.sh
+```
+
+设置 `RKCLAW_OFFLINE=1` 可离线复用已经缓存的固定源码版本。维护者只有在更新
+仓库内预编译库及其来源清单时才使用 `--update-bundled`。
+
+## 组件版本
+
+| 组件 | 版本 |
 | --- | --- |
-| **SKILLS** |  内置一系列端侧算法SKILL，提供本地化的语音、视觉、知识库等能力 |
-| **ModelHub** | 管理和调度算法模型的网关，方便SKILL接入调用算法服务 |
-| **端云智能路由（实验）** | 智能识别任务复杂度，在本地模型与云端模型之间自动分发请求，节省Token用量；支持记忆路由，持续优化路由决策 |
-| **Dashboard** | 提供路由统计、运行时配置、反馈标注和记忆查看等功能。 |
+| ClawChips | 0.7.0 |
+| RKClawServer | 0.3.2（`v0.3.2-source.1`） |
+| Nanobot RK | 0.2.2（`rk-v0.2.2`） |
+| 指南默认 Agent 模型 | AgentModel V3.1 |
 
----
+精确 commit 与 SHA256 记录在
+[`release-manifest.yaml`](./release-manifest.yaml)。
 
-## SKILLS
+## 许可证
 
-在[skills](./skills/README_ZH.md)目录内置一系列端侧芯片平台能力的SKILL，在持续不断适配更新丰富，欢迎各位开发者提交分享。
-
-当前提供了基于ModelHub部署的ASR（语音识别）/TTS（语音合成）/VLM（视觉语音大模型）等算法服务的Skill应用实例，可参考做进一步的开发。
-
-| Skill | 目录 | 功能 | 典型用途 |
-|---|---|---|---|
-| `rk-asr` | `rk-asr/` | 将音频文件转写为文本。 | 用于语音转文字、音频转录或语音识别结果获取。 |
-| `rk-tts` | `rk-tts/` | 将文本转换为音频。 | 用于文本转语音、生成音频或直接板端朗读文本。 |
-| `rk-vl` | `rk-vl/` | 基于VLM模型对图像进行自然语言的目标检测识别，支持摄像头持续监控和提醒。 | 用于从图片或摄像头中检测、监控包裹快递、老人跌倒等自然语言描述目标。 |
-| `rk-rag` | `rk-rag/` | 构建并查询知识库。 | 用于将文档导入本地向量库，并基于指定知识库进行检索问答。 |
-| `rk-meeting-watcher` | `rk-meeting-watcher/` | 实时监听会议语音，通过 ASR 转写内容，匹配配置的关键词，并在命中后发送提醒。 | 用于监听会议中的重要关键词，并及时收到提醒通知。 |
-
-## ModelHub
-
-ModelHub 是 ClawChips 面向 RK 端侧芯片的本地模型服务调度网关，用于统一管理板端可用的算法模型服务，并为 SKILL、OpenClaw 插件或其他本地应用提供稳定的调用入口。
-
-它位于应用逻辑与具体模型服务之间，负责根据设备资源与服务状态完成任务排队、模型服务拉起、健康检查、请求转发和结果查询。上层 SKILL 不需要关心某个模型是否已经启动、当前设备是否繁忙、服务端口如何分配等细节，只需要通过统一接口提交任务即可。
-
-ModelHub 支持：
-
-- 使用 YAML 配置文件描述 RK3588、RK1820/RK1828 等设备及其承载的模型服务
-- 按设备并发度和模型显存 / 内存占用进行任务调度，避免多个重模型同时抢占资源
-- 自动执行模型服务的启动、停止和健康检查命令
-- 将 HTTP 请求转发到目标模型服务，兼容 OpenAI 风格的本地模型 API
-
-典型调用链如下：
-
-```text
-┌─────────────────────┐     ┌─────────────────────┐
-│        SKILL        │     │   OpenClaw Plugin   │
-└──────────┬──────────┘     └──────────┬──────────┘
-           │                           │
-           └─────────────┬─────────────┘
-                         │
-                         ▼
-                ┌─────────────────┐
-                │    ModelHub     │
-                │ Scheduler / API │
-                └────────┬────────┘
-                         │
-       ┌─────────────────┼─────────────────┬─────────────────┐
-       │                 │                 │                 │
-       ▼                 ▼                 ▼                 ▼
-┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│     ASR     │   │     TTS     │   │     VLM     │   │  Embedding  │
-└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
-```
-
-**说明:**
-- 更多安装、配置和客户端调用示例可参考 [model_hub_py](./model_hub_py/README_ZH.md)。
-- ASR/TTS/VLM等算法模型服务在ClawChips的固件中已经内置，安装环境请参考[ClawChips_Quick_Start](../ClawChips_Quick_Start.md)
-
-## 端云路由（实验）
-
-ClawChips 插件内置一个本地运行的智能路由网关，位于 OpenClaw 与多个模型后端之间。
-
-- 智能识别任务复杂度，支持任务请求自动路由到本地 / 云端
-- 支持记忆路由，持续优化路由决策
-- 支持Dashboard配置界面
-
-```text
-┌─────────────────┐     ┌──────────────────────┐               ┌─────────────────────────┐
-│    Channels     │────▶│       OpenClaw       │──────────────▶│          CLOUD          │
-│                 │     │     Gateway/App      │────────┐      │ ┌─────────────────────┐ │
-└─────────────────┘     └──────────────────────┘        │      │ │        Qwen         │ │
-                               │      ▲                 │      │ └─────────────────────┘ │
-                               │      │                 │      │ ┌─────────────────────┐ │
-                               │      │                 │      │ │        Kimi         │ │
-                               ▼      │                 │      │ └─────────────────────┘ │
-                        ┌─────────────────────┐         │      │ ┌─────────────────────┐ │
-                        │      ClawChips      │         │      │ │         GLM         │ │
-                        │     LocalRouter     │         │      │ └─────────────────────┘ │
-                        └─────────────────────┘         │      │ ┌─────────────────────┐ │
-                                                        │      │ │    OpenAI / More    │ │
-                                                        │      │ └─────────────────────┘ │
-                                                        │      └─────────────────────────┘
-                                                        │
-                                                        │      ┌─────────────────────────┐
-                                                        └─────▶│          LOCAL          │
-                                                               │      RKLLM Server       │
-                                                               └─────────────────────────┘
-```
-
-更多安装、配置和使用示例可参考 [clawchips-plugin](./clawchips-plugin/README_ZH.md)。
-
-**说明**：使用本地LLM作为OpenClaw的Provider当前还处于实验阶段，仅供体验。
-
----
-
-## Dashboard 功能
-
-网关提供一个Dashboard能够方便进行后台配置和查看统计信息，使用演示如下：
-
-![Dashboard 预览](res/dashboard.gif)
-
----
-
-## 安装指南
-
-### 环境要求
-
-- RK3588+RK1828 Debian/Ubuntu操作系统
-
-### 快速开始
-
-完整的开发板环境搭建和安装请参考《[ClawChips快速上手指南](./ClawChips_Quick_Start.md)》
-
-## 诚邀开发者“一起玩出百样精彩”
-为全力支撑开发者高效开发与创新，我们特别推出专属共创支持机制：
-您可以扫描图中二维码申请RK3588+RK1828开发套件的无偿借用权益，我们将根据填写质量及适配情况，为企业和开发者提供为期一个月的套件体验机会，方便大家能够更便捷地体验ClawChips的全量能力、打磨优质技能。
-
-![报名二维码](res/baoming.png)
-
-## 参考项目
-
-- [OpenClaw](https://github.com/openclaw/openclaw)
-- [EdgeClaw](https://github.com/OpenBMB/EdgeClaw)
-- [UncommonRoute](https://github.com/CommonstackAI/UncommonRoute)
-- [ClawRouter](https://github.com/BlockRunAI/ClawRouter)
-- [LLMRouter](https://github.com/ulab-uiuc/LLMRouter)
-
----
-
-## License
-
-MIT
+ClawChips 与 RKClawServer 使用 MIT 许可证。随仓库分发的第三方源码和库保留
+各自的上游许可证，详见
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)。

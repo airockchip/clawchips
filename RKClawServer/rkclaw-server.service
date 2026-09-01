@@ -1,0 +1,17 @@
+[Unit]
+Description=RKClawServer OpenAI-compatible inference service
+After=network-online.target rknn3.service
+Wants=network-online.target
+Requires=rknn3.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/userdata/RKClawServer
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/userdata/RKClawServer/venv/bin/python -m gateway
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

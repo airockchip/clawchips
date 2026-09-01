@@ -1,0 +1,11 @@
+release/ export-ignore
+docs/*.pdf export-ignore
+docs/*ClawChips* export-ignore
+docs/images/Rockchip_RK182X_User_Guide_ClawChips_CN/ export-ignore
+deps/rknn3_toolkit_lite/ export-ignore
+RKClaw/ export-ignore
+.gitmodules export-ignore
+.github/ export-ignore
+.pytest_cache/ export-ignore
+build/ export-ignore
+dist/ export-ignore

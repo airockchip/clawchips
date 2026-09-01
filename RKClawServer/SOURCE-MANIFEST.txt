@@ -1,0 +1,9 @@
+RKClawServer.repository = https://github.com/airockchip/RKClawServer.git
+RKClawServer.version = 0.3.2
+RKClawServer.commit = 119ccd555f359fed9f92cb16bcb8c6780174ade0
+XGrammar.repository = https://github.com/mlc-ai/xgrammar.git
+XGrammar.commit = 557becfb64c503ae9c04344b0047661f43f44320
+Tokenizer.repository = https://github.com/airockchip/rknn3-model-zoo.git
+Tokenizer.commit = 174e44c77230735b1458946debb62b3982c1ee58
+Tokenizer.x86_64.sha256 = ac898ea2d736dbb9019bd3885788eed66377c36cb5558fd93f260154714d867e
+Tokenizer.aarch64.sha256 = 938ec8ba8a1446aa4d10bc6e5d6fa78ffe23851808e9eabaf1e3a86ea9e5ed31

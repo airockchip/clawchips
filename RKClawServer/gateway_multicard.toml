@@ -1,0 +1,88 @@
+# CoPaw-Flash-9B 双卡流水线配置模板
+#
+# stage 的执行顺序就是 [[multicard.stages]] 在本文件中的出现顺序：
+#   stage 0: seg0，接收 embedding，输出中间 hidden states
+#   stage 1: seg1，接收 stage 0 的输出，生成最终 logits
+#
+# 启动前请在板端确认两张卡的 device_id；若枚举结果不同，只需替换下面
+# 两个 device_id，不要交换 seg0/seg1 的模型顺序。
+
+[server]
+host = "0.0.0.0"
+port = 8081
+queue_size = 32
+enable_streaming = true
+
+[runtime]
+target = "rk1820"
+# 多卡模式下不配置 runtime.device_id，由每个 stage 单独指定设备。
+core_mask = 255
+native_library = ""
+
+[model]
+id = "CoPaw-9B-RKNN-X2"
+tokenizer_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm.tokenizer.gguf"
+embed_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm.embed.bin"
+chat_template_file = ""
+# 新版板端模型支持 90 × 1024 tokens。
+max_context_tokens = 92160
+max_new_tokens = 4096
+enable_thinking = true
+clear_kv_cache = false
+kv_cache_dir = "/userdata/RKClawServer/kv_cache/CoPaw-9B-RKNN-X2"
+kv_cache_system_marker = "## Runtime\nLinux aarch64, Python 3.11.2"
+
+[checkpoint]
+# SAVE_CHECKPOINT 策略；单卡和每个多卡 stage 使用相同参数。
+enabled = true
+start_pos = 10240
+interval = 1024
+max_count = 18
+
+[multicard]
+# 每次生成会按此粒度选择/扩展 RKNN 输入长度。
+bucket_size = 128
+
+[[multicard.stages]]
+device_id = "0001:11:00.0"
+rknn_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm_seg0.rknn"
+weight_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm_seg0.weight"
+# 通常可由运行时自动识别；只有启动时提示输出张量有歧义才取消注释并填写实际名称。
+# output_tensor_name = "hidden_states"
+
+[[multicard.stages]]
+device_id = "0003:31:00.0"
+rknn_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm_seg1.rknn"
+weight_path = "/userdata/CoPaw-9B-RKNN-X2/CoPaw-Flash-9B-llm_seg1.weight"
+
+[sampling]
+temperature = 0.0
+top_p = 0.95
+top_k = 1
+repeat_penalty = 1.0
+
+[reasoning]
+separate_output = true
+fallback_delimiter = "\n\n\n"
+
+[tool_call_correction]
+enabled = true
+
+[xgrammar]
+enabled = true
+model_structure = "qwen3.5"
+debug = false
+
+[native_sampling]
+enabled = true
+seed = -1
+repeat_last_n = 64
+penalize_newline = false
+
+[logging]
+debug_logs = true
+logger_detail_log_max_chars = 4096
+openai_request_log = "off"
+llm_input_log = "logger"
+llm_output_log = "logger"
+openai_response_log = "off"

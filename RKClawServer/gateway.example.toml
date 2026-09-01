@@ -1,0 +1,113 @@
+[server]
+host = "0.0.0.0"
+port = 8081
+queue_size = 32
+enable_streaming = true
+sse_heartbeat_interval_s = 20.0
+
+[runtime]
+target = "rk1820"
+# Optional when more than one RKNN device is present (see RKNN3Lite.get_devices_id()).
+device_id = ""
+core_mask = 255
+native_library = ""
+
+[model]
+id = "AgentModel-V3.1-4B"
+rknn_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.rknn"
+weight_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.weight"
+tokenizer_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.tokenizer.gguf"
+embed_path = "/userdata/AgentModel-V3.1-4B-RKNN/AgentModel-V3.1-4B.embed.bin"
+chat_template_file = ""
+max_context_tokens = 32000
+max_new_tokens = 8192
+enable_thinking = true
+clear_kv_cache = false
+kv_cache_dir = "/userdata/RKClawServer/kv_cache"
+kv_cache_system_marker = ""
+
+[checkpoint]
+# Applied to single-card runtime and every multicard stage.
+enabled = true
+start_pos = 10240
+interval = 1024
+max_count = 18
+
+# Optional segmented-model pipeline. When two or more stages are present,
+# these entries replace runtime.device_id and model.rknn_path/weight_path.
+# Declaration order is execution order: stage 0 receives tokens and the final
+# stage produces logits/tokens. Each device_id must be unique.
+# Requires RKNN3 Toolkit Lite 1.0.5b2 or newer with prefill_only and
+# disable_sampling support. Multicard Gemma4 is not supported yet.
+#
+#[multicard]
+#bucket_size = 128
+#
+#[[multicard.stages]]
+#device_id = "0001:11:00.0"
+#rknn_path = "/userdata/LargeModel-RKNN/LargeModel_seg0.rknn"
+#weight_path = "/userdata/LargeModel-RKNN/LargeModel_seg0.weight"
+## Optional when the stage exposes more than one plausible hidden-state output.
+#output_tensor_name = "hidden_states"
+#
+#[[multicard.stages]]
+#device_id = "0002:21:00.0"
+#rknn_path = "/userdata/LargeModel-RKNN/LargeModel_seg1.rknn"
+#weight_path = "/userdata/LargeModel-RKNN/LargeModel_seg1.weight"
+
+[sampling]
+temperature = 0.3
+top_p = 0.95
+top_k = 1
+repeat_penalty = 1.1
+frequency_penalty = 0.0
+presence_penalty = 0.0
+
+[reasoning]
+separate_output = true
+fallback_delimiter = ""
+
+[tool_call_correction]
+enabled = false
+
+[xgrammar]
+enabled = false
+debug = false
+
+[native_sampling]
+enabled = false
+# -1 chooses a fresh native sampler seed for each request.
+seed = -1
+# Number of generated tokens tracked by repeat penalty.
+repeat_last_n = 64
+# Match RKNN sampling by default: do not repeat-penalize the linefeed token.
+penalize_newline = false
+
+[logging]
+debug_logs = false
+# Optional detail log targets: off, logger, file, both.
+# If omitted, debug_logs=true defaults all four to logger; debug_logs=false defaults them to off.
+# Optional logger-only detail log truncation. 0 means unlimited.
+# If exceeded, the middle is replaced with "..." and half of this size is kept at each end.
+logger_detail_log_max_chars = 0
+openai_request_log = "off"
+llm_input_log = "off"
+llm_output_log = "off"
+openai_response_log = "off"
+# WebUI session history is independent from the legacy detail-log targets above.
+session_logs_enabled = false
+session_retention_days = 30
+# Empty disables the WebUI Server-log viewer.
+server_log_path = "logs/server.log"
+server_log_max_bytes = 10485760
+server_log_backup_count = 5
+
+[webui]
+# Disabled by default for backwards compatibility. Set an administrator token
+# through RKCLAW_WEBUI_TOKEN (preferred) or auth_token before enabling.
+enabled = false
+auth_token = ""
+data_path = "logs/webui.sqlite3"
+stats_retention_days = 90
+reload_drain_timeout_s = 300
+session_cookie_ttl_s = 28800
